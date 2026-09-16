@@ -1,0 +1,22 @@
+{
+    "active_profile": "Default",
+    "profiles": {
+        "Default": {
+            "interview": {
+                "role": "",
+                "company": "",
+                "company_details": "",
+                "important_info": "",
+                "interview_type": "",
+                "technology_stack": []
+            },
+            "personal": {
+                "name": "",
+                "education": "",
+                "projects": "",
+                "skills": [],
+                "resume_text": "CHIRAG SHARMA\nGwalior, Madhya Pradesh, India \u00a0|\u00a0 +91 8305525932 \u00a0|\u00a0 chiragsharmawork95@gmail.com \nlinkedin.com/in/chiragsharmawork \u00a0|\u00a0 github.com/chirag-x \u00a0|\u00a0 chirag-webpage.netlify.app \nPROFESSIONAL SUMMARY\nFull Stack & Python Developer with expertise in building scalable web applications, RESTful microservices, and AI-driven\nautomation workflows. Proficient in Python, JavaScript, React, Node.js, and FastAPI. Proven track record of developing modular\nsystems, optimizing API response times, and integrating advanced AI capabilities into full-stack web architectures. \nTECHNICAL SKILLS\nProgramming Languages: Python, JavaScript, C++, SQL\nFrontend Development: React.js, HTML5, CSS3, Tailwind CSS, Bootstrap\nBackend Frameworks & APIs: FastAPI, Node.js, Express.js, RESTful API Development\nDatabases: MongoDB, MySQL\nTools & Version Control: Git, GitHub, Playwright\nAI & Automation: OpenRouter APIs, LLM Integration, Generative AI, Prompt Engineering\nPROJECT EXPERIENCE\nOmnix \u2013 Autonomous AI & Full-Stack Desktop Agent\nTech Stack: Python, FastAPI, MongoDB, Playwright, Whisper, OpenRouter API\nEnhanced system scalability and execution reliability by 35%, as measured by modular test coverage and reduced runtime\nexception rates, by architecting a scalable 20+ module micro-architecture utilizing Python, FastAPI, and modular OOP principles.\nDecreased user task completion time by 40%, as measured by automated execution benchmarks, by engineering a multi-\nmodal task planner with custom prompt pipelines that converts complex natural language intent into executable OS-level actions.\nOptimized real-time context retrieval efficiency by 25%, as measured by query response times under 150ms, by integrating\ndatabase indexing for persistent memory and user history tracking.\nImproved automation execution accuracy by 30%, as measured by web task completion rates, by building autonomous\nbrowser workflows using Playwright and AI decision loops.\nAsta AI \u2013 Web Portfolio Assistant & REST Service\nTech Stack: JavaScript, Node.js, Express.js, React, OpenRouter API\nIncreased interactive visitor engagement by 45%, as measured by average session duration and interactive query volume, by\ndesigning and deploying an asynchronous voice and text AI assistant embedded directly into a React frontend.\nReduced client-side API response latency by 30%, as measured by network payload and initial response times, by building a\nlightweight Express.js middleware server to cache LLM responses and sanitize user inputs.\nMaintained 90%+ backend endpoint uptime, as measured by integration checks, by implementing structured error handling and\nstrict schema validation for RESTful endpoints.\nEDUCATION\nRustam Ji Institute of Technology (RJIT)\nGwalior, M.P. | Expected Grad: 2027\nBachelor of Technology (B.Tech) \u2013 Information Technology \u00a0|\u00a0 CGPA: 7.0/10\nGwalior Public School\nGwalior, M.P.\nHigher Secondary Certificate (Class XII) \u00a0|\u00a0 75%\nTECHNICAL CERTIFICATIONS & ACHIEVEMENTS\nPython Assessment Certification \u2013 LearnTube.ai (Earned Feb 2026)\nCareer Essentials in Generative AI \u2013 Microsoft & LinkedIn (Earned Jul 2026)\nBuild Your Generative AI Productivity Skills \u2013 Microsoft & LinkedIn (Earned Jul 2026)\nFull Stack Web Engineering Certification \u2013 Tutedude\nAlgorithmic Problem Solving: Solved 150+ Data Structures & Algorithms problems on LeetCode\n\u2022 \n\u2022 \n\u2022 \n\u2022 \n\u2022 \n\u2022 \n\u2022 \n\u2022 \n\u2022 \n\u2022 \n\u2022 \n\u2022"
+            }
+        }
+    }
+}

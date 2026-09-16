@@ -16,5 +16,5 @@ models/
 *.bin
 *.pt
 *.pth
-.temp_tts/
-.tests/
+/temp_tts/
+/tests/

@@ -170,7 +170,11 @@ class OverlayWindow(QWidget):
         self.layout.addWidget(self.text_area)
         
         # Signature
+<<<<<<< HEAD
         self.sig_label = QLabel("Designed and Developed by <a href='https://nor-vi.in/' style='color:#0055A4; text-decoration:none;'>Norvi Agency</a>")
+=======
+        self.sig_label = QLabel("Designed and Developed by <a href='https://chirag-portfolio-v3.netlify.app/' style='color:#0055A4; text-decoration:none;'>Chirag Sharma</a>")
+>>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
         self.sig_label.setOpenExternalLinks(True)
         self.sig_label.setAlignment(Qt.AlignRight)
         self.sig_label.setStyleSheet(f"font-size: 10px; color: {self.theme.get('base_text', '#888')}; opacity: 0.6; margin-right: 5px;")
@@ -417,11 +421,32 @@ class OverlayWindow(QWidget):
         self.ind_voice.setToolTip("Voro Voice Output")
 
     def update_activation_label(self, mode: str):
+<<<<<<< HEAD
         self.activation_label.setText(' Norvi Agent ')
         self.activation_label.setStyleSheet(
             'font-size: 11px; color: white; background-color: #0055A4; '
             'font-weight: bold; padding: 2px 8px; border-radius: 8px; margin-right: 6px;'
         )
+=======
+        if mode == 'premium':
+            self.activation_label.setText(" ✦ Premium Mode ")
+            self.activation_label.setStyleSheet(
+                "font-size: 11px; color: #1A1A00; background-color: #FFD700; "
+                "font-weight: bold; padding: 2px 8px; border-radius: 8px; margin-right: 6px;"
+            ) # Gold pill
+        elif mode == 'local':
+            self.activation_label.setText(" ⚡ Local Mode ")
+            self.activation_label.setStyleSheet(
+                "font-size: 11px; color: #003300; background-color: #00C853; "
+                "font-weight: bold; padding: 2px 8px; border-radius: 8px; margin-right: 6px;"
+            ) # Green pill
+        else:
+            self.activation_label.setText(" ● Basic Mode ")
+            self.activation_label.setStyleSheet(
+                f"font-size: 11px; color: white; background-color: #0055A4; "
+                f"font-weight: bold; padding: 2px 8px; border-radius: 8px; margin-right: 6px;"
+            ) # Blue pill
+>>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
     def _update_status_bar(self):
         self.status_label.setText(
             f"Mic: {self.current_mic} | AI: {self.current_ai} | Privacy: {self.current_privacy} | State: {self.current_state}"

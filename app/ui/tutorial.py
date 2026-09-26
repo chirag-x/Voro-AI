@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 import os
+=======
+﻿import os
+>>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
                                QPushButton, QStackedWidget, QWidget)
 from PySide6.QtCore import Qt

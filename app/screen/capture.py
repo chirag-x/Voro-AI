@@ -1,4 +1,4 @@
-import time
+﻿import time
 import mss
 from PIL import Image
 from typing import List, Dict, Optional

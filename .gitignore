@@ -43,7 +43,5 @@ STT_models/
 *.bin
 *.pt
 *.pth
-
-# OS Files
-.DS_Store
-Thumbs.db
+/temp_tts/
+/tests/

@@ -1,14 +1,52 @@
+# =============================================================
+# Voro - Norvi Agency Edition
+# Requirements (CPU-Only, Clean Build)
+# =============================================================
+# To install: pip install -r requirements.txt
+# NOTE: Do NOT install torch or any CUDA packages.
+#       faster-whisper uses ctranslate2 which bundles its own runtime.
+# =============================================================
+
+# --- Core Framework ---
+PySide6==6.8.1
+
+# --- Configuration & Environment ---
 python-dotenv==1.0.1
 pydantic==2.10.3
 pydantic-settings==2.15.0
-pytest==8.3.4
-sounddevice==0.5.1
-numpy==2.2.1
-setuptools==69.5.1
-webrtcvad==2.0.10
+
+# --- Speech & Audio ---
 faster-whisper==1.2.1
+webrtcvad==2.0.10
+sounddevice==0.5.1
+SoundCard==0.4.6
+edge-tts==7.2.8
+
+# --- AI / LLM ---
 httpx==0.28.1
-PySide6==6.8.1
-mss==10.2.0
+
+# --- Vision / OCR ---
 easyocr==1.7.2
+pytesseract==0.3.13
 pillow==11.1.0
+mss==10.2.0
+pymupdf==1.28.2
+
+# --- Utility ---
+numpy==2.2.1
+huggingface-hub==1.31.0
+tqdm==4.70.1
+keyboard==0.13.5
+Markdown==3.10.3
+pygments==2.21.0
+duckduckgo-search==8.1.1
+
+# =============================================================
+# NOT INCLUDED (intentionally removed):
+#   - torch / torchvision / torchaudio  -> Not used. ctranslate2 handles STT inference.
+#   - pytest                            -> Dev-only, not needed in production.
+#   - setuptools                        -> Build tool, not a runtime dependency.
+#   - scipy, sympy, networkx            -> Pulled in by easyocr install but not used at runtime.
+#   - scikit-image, tokenizers          -> Same as above (easyocr transitive deps).
+#   - onnxruntime                       -> Only used by easyocr internally during model load.
+# =============================================================

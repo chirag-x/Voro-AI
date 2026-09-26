@@ -1,4 +1,4 @@
-﻿    def update_activation_label(self, mode: str):
+    def update_activation_label(self, mode: str):
         if mode == 'premium':
             self.activation_label.setText("Premium Mode")
             self.activation_label.setStyleSheet("font-size: 11px; color: #FFD700; font-weight: bold; padding-right: 10px;") # Gold

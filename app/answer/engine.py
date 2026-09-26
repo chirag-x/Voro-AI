@@ -31,9 +31,24 @@ class AnswerEngine:
             return AnswerMode.FOLLOW_UP
             
         # Screen context might force coding mode
-        if mm_ctx and mm_ctx.coding_context and mm_ctx.coding_context.language != "UNKNOWN":
-            if "this" in text or "wrong" in text or "error" in text:
-                return AnswerMode.CODING
+        if mm_ctx:
+            is_code_on_screen = mm_ctx.coding_context and mm_ctx.coding_context.language != "UNKNOWN"
+            
+            # Heuristics for LeetCode or high-reasoning coding problems on screen
+            screen_text = ""
+            if mm_ctx.ocr_text:
+                screen_text = mm_ctx.ocr_text.lower()
+                
+            is_coding_problem = any(kw in screen_text for kw in [
+                "leetcode", "hackerrank", "given an array", "return the", 
+                "time complexity", "space complexity", "constraints:", 
+                "example 1:", "output:", "input:"
+            ])
+            
+            if is_code_on_screen or is_coding_problem:
+                # If the user is asking about the screen or solving a problem
+                if any(kw in text for kw in ["this", "wrong", "error", "question", "screen", "solve", "answer"]):
+                    return AnswerMode.CODING
             
         if "what is" in text or "explain" in text or "how does" in text or request.intent == "QUESTION":
             if request.has_context:
@@ -68,7 +83,7 @@ class AnswerEngine:
                 "\nEXAMPLE BAD ANSWER:\n'Certainly! To optimize this algorithm, one must employ a Breadth-First Search. First, initialize a Hash Map...'\n"
                 "EXAMPLE GOOD ANSWER:\n'I think the best way to approach this is using a Breadth-First Search to keep track of the levels. So, my first thought here is to use a hash map...'\n"
             )
-        elif tone == "Conversational Hinglish (Script)":
+        elif tone == "Conversational (Hinglish)":
             tone_modifier = (
                 "TONE & STYLE CONSTRAINTS:\n"
                 "- Speak EXACTLY as a senior Indian developer would in a casual interview, using a natural mix of Hindi and English (Hinglish).\n"
@@ -81,10 +96,22 @@ class AnswerEngine:
                 "\nEXAMPLE BAD ANSWER:\n'Certainly! Algorithm ko optimize karne ke liye, Breadth-First Search ka istemal karein...'\n"
                 "EXAMPLE GOOD ANSWER:\n'I think the best way is using Breadth-First Search. So, mera first thought yahan pe ek hash map use karne ka hai taaki hum levels ko track kar sakein...'\n"
             )
-        elif tone == "Code Only":
-            tone_modifier = "TONE & STYLE CONSTRAINTS: Provide ONLY the raw code or code snippet to solve the problem. DO NOT explain anything unless explicitly asked. NO introductions, NO conclusions."
-        else:
-            tone_modifier = "TONE & STYLE CONSTRAINTS: Provide a direct, technically accurate answer. Be concise and academic. Use bullet points and markdown freely."
+        elif tone == "Supportive & Encouraging":
+            tone_modifier = (
+                "TONE & STYLE CONSTRAINTS:\n"
+                "- Speak like a highly supportive, empathetic mentor or pair-programming buddy.\n"
+                "- Frequently offer praise ('Great approach!', 'I love how you thought of that').\n"
+                "- Be patient and elaborate on concepts gently without being overly academic.\n"
+                "- Use markdown, bullet points, and formatting to make it easy to read.\n"
+            )
+        else: # "Direct & Technical" or fallback
+            tone_modifier = (
+                "TONE & STYLE CONSTRAINTS:\n"
+                "- Provide a highly direct, technically rigorous answer.\n"
+                "- Skip all casual conversational filler. Be incredibly concise and academic.\n"
+                "- Rely heavily on bullet points, bolding for key terms, and markdown formatting.\n"
+                "- If providing code, include exact time and space complexity immediately.\n"
+            )
         
         if has_profile:
             base_prompt = "You are acting as the candidate in a job interview. I am feeding you questions from my interviewer. You MUST provide the exact answers I should say out loud, spoken in the first person ('I', 'my'). Use my profile and resume (provided below) to answer behavioral questions like 'Tell me about yourself'. Do NOT introduce yourself as an AI or as 'Voro'."

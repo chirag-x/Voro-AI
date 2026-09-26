@@ -17,7 +17,7 @@ class VadEngine:
     Voice Activity Detection subsystem using webrtcvad.
     Processes audio chunks to detect speech segments.
     """
-    def __init__(self, sample_rate: int = 16000, aggressiveness: int = 2):
+    def __init__(self, sample_rate: int = 16000, aggressiveness: int = 3):
         self.sample_rate = sample_rate
         self.vad = webrtcvad.Vad(aggressiveness)
         
@@ -35,6 +35,11 @@ class VadEngine:
         self.padding_duration_ms = 150
         self.num_padding_frames = int(self.padding_duration_ms / self.frame_duration_ms)
         self.ring_buffer = collections.deque(maxlen=self.num_padding_frames)
+        
+        # How much silence before we cut off the speech (prevents stuttering and breathing hallucinations)
+        self.silence_duration_ms = 800 # 1.2 seconds
+        self.num_silence_frames = int(self.silence_duration_ms / self.frame_duration_ms)
+        self.silence_counter = 0
         
         self.current_speech_segment = []
 
@@ -61,6 +66,7 @@ class VadEngine:
                 num_voiced = len([f for f, speech in self.ring_buffer if speech])
                 if num_voiced > 0.9 * self.ring_buffer.maxlen:
                     self.triggered = True
+                    self.silence_counter = 0
                     events.append((VadEvent.SPEECH_STARTED, None))
                     # Keep the padding before speech started
                     for f, s in self.ring_buffer:
@@ -68,10 +74,15 @@ class VadEngine:
                     self.ring_buffer.clear()
             else:
                 self.current_speech_segment.append(frame)
-                num_unvoiced = len([f for f, speech in self.ring_buffer if not speech])
-                if num_unvoiced > 0.9 * self.ring_buffer.maxlen:
+                
+                if not is_speech:
+                    self.silence_counter += 1
+                else:
+                    self.silence_counter = 0
+                    
+                if self.silence_counter >= self.num_silence_frames:
                     self.triggered = False
-                    # Emit speech segment
+                    # Emit speech segment (we could optionally trim the silence tail here, but keeping it helps STT context)
                     segment = np.concatenate(self.current_speech_segment)
                     events.append((VadEvent.SPEECH_ENDED, segment))
                     self.current_speech_segment = []

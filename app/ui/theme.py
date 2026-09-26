@@ -36,9 +36,11 @@ def get_theme_colors(theme_mode: str = "system") -> dict:
         return {
             "bg": "#1E1E1E",
             "base_text": "#E0E0E0",
+            "border": "#444444",
         }
     else:
         return {
-            "bg": "#FFFFFF",
+            "bg": "#F5F5F5",
             "base_text": "#1A1A1A",
+            "border": "#BBBBBB",
         }

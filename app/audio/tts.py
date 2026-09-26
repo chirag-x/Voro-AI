@@ -1,4 +1,4 @@
-﻿import os
+import os
 import time
 import asyncio
 import threading
@@ -13,18 +13,21 @@ class TTSWorker(threading.Thread):
         self.config = config
         self.queue = queue.Queue()
         self.running = True
-        self.voice = "en-US-AriaNeural"
+        self.voice = getattr(self.config, 'ui_voice', 'en-US-AriaNeural')
         
         self.temp_dir = os.path.join(os.getcwd(), "temp_tts")
         os.makedirs(self.temp_dir, exist_ok=True)
         self._clear_temp()
+
+    def set_voice(self, voice: str):
+        self.voice = voice
 
     def _clear_temp(self):
         for f in os.listdir(self.temp_dir):
             if f.endswith(".mp3"):
                 try:
                     os.remove(os.path.join(self.temp_dir, f))
-                except:
+                except Exception:
                     pass
 
     def enqueue(self, text: str):

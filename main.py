@@ -1,8 +1,12 @@
 import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+os.environ["OMP_NUM_THREADS"] = "4"
+os.environ["MKL_NUM_THREADS"] = "4"
 import sys
 import signal
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QIcon
+from app.core.norvi_gatekeeper import require_license
 from app.core.application import VoroApplication
 from app.ui.overlay import OverlayWindow, UIBridge
 from app.utils.logging import logger
@@ -20,7 +24,17 @@ def resource_path(relative_path):
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
 
+def global_exception_handler(exc_type, exc_value, exc_traceback):
+    from app.utils.logging import logger
+    import sys
+    if issubclass(exc_type, KeyboardInterrupt):
+        sys.__excepthook__(exc_type, exc_value, exc_traceback)
+        return
+    logger.critical("Uncaught Exception:", exc_info=(exc_type, exc_value, exc_traceback))
+
 def main():
+    import sys
+    sys.excepthook = global_exception_handler
     try:
         # Force Windows to group this separately from python.exe
         if sys.platform == "win32":
@@ -33,6 +47,26 @@ def main():
                 
         # Create Qt App
         qt_app = QApplication(sys.argv)
+        
+        # Start Ollama Manager
+        try:
+            from app.core.ollama_manager import manager as ollama_manager
+            ollama_manager.check_and_start()
+        except Exception as e:
+            logger.error(f"Failed to initialize Ollama Manager: {e}")
+        
+        # Set app-wide icon
+        icon_path = os.path.join(os.getcwd(), "logo.ico")
+        if os.path.exists(icon_path):
+            qt_app.setWindowIcon(QIcon(icon_path))
+            
+        # Don't quit when windows hide (unless explicitly closed)
+        qt_app.setQuitOnLastWindowClosed(False)
+        # --- NORVI ANTI-PIRACY GATEKEEPER ---
+        if not require_license("voro"):
+            sys.exit(0)
+        # ------------------------------------
+
         
         # Force a global normal mouse pointer (stealth mode)
         # This prevents the mouse turning into an "I" text cursor over invisible input fields
@@ -47,17 +81,8 @@ def main():
         # Enable Ctrl-C to kill the Qt app
         signal.signal(signal.SIGINT, signal.SIG_DFL)
         
-        # Create Dummy Parent to hide from taskbar
-        from PySide6.QtWidgets import QWidget
-        from PySide6.QtCore import Qt
-        dummy_parent = QWidget()
-        dummy_parent.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint)
-        dummy_parent.setAttribute(Qt.WA_TranslucentBackground)
-        dummy_parent.setWindowOpacity(0)
-        dummy_parent.show()
-        
         # Create UI
-        overlay = OverlayWindow(parent=dummy_parent)
+        overlay = OverlayWindow()
         bridge = UIBridge()
         overlay.bridge = bridge  # Pass bridge reference to overlay so it can emit signals
         bridge.answer_received.connect(overlay.update_answer)
@@ -98,53 +123,8 @@ def main():
         # Show overlay first so user knows something is happening
         overlay.show()
         
-        # --- Feature 5: System Tray Icon ---
-        from PySide6.QtWidgets import QSystemTrayIcon, QMenu
-        from PySide6.QtGui import QAction
-        tray = QSystemTrayIcon(qt_app)
-        if os.path.exists(icon_path):
-            tray.setIcon(QIcon(icon_path))
-        tray.setToolTip("Voro Assistant")
-        
-        tray_menu = QMenu()
-        action_show = QAction("Show Voro")
-        action_show.triggered.connect(lambda: (overlay.show(), overlay.activateWindow()))
-        action_settings = QAction("Settings")
-        action_settings.triggered.connect(overlay.open_settings)
-        
-        def _do_restart():
-            import subprocess
-            import os
-            from dotenv import dotenv_values
-            
-            env_path = os.path.join(os.getcwd(), ".env")
-            new_env = os.environ.copy()
-            if os.path.exists(env_path):
-                new_env.update(dotenv_values(env_path))
-                
-            if getattr(sys, 'frozen', False):
-                subprocess.Popen([sys.executable], env=new_env)
-            else:
-                subprocess.Popen([sys.executable] + sys.argv, env=new_env)
-            qt_app.quit()
-            
-        action_restart = QAction("Restart")
-        action_restart.triggered.connect(_do_restart)
-        action_quit = QAction("Quit")
-        action_quit.triggered.connect(qt_app.quit)
-        
-        tray_menu.addAction(action_show)
-        tray_menu.addAction(action_settings)
-        tray_menu.addSeparator()
-        tray_menu.addAction(action_restart)
-        tray_menu.addAction(action_quit)
-        tray.setContextMenu(tray_menu)
-        
-        # Double-click tray icon to show window
-        tray.activated.connect(lambda reason: overlay.show() if reason == QSystemTrayIcon.ActivationReason.DoubleClick else None)
-        
-        # Hand tray to overlay so it can control visibility
-        overlay.set_tray(tray)
+        # Tray is now handled in overlay.py
+        overlay._apply_taskbar_state()
         
         # Start initialization in a background thread so it doesn't block the Qt event loop
         import threading
@@ -194,6 +174,8 @@ def main():
         # We must call show() from main Qt thread, so we'll add a signal to UIBridge
         bridge.trigger_snip.connect(snip_overlay.showFullScreen)
         bridge.toggle_taskbar.connect(overlay.toggle_taskbar_visibility)
+        bridge.toggle_tray.connect(overlay.toggle_tray_visibility)
+        bridge.toggle_stealth.connect(overlay.toggle_stealth_mode)
         
         # Global Hotkeys
         try:
@@ -223,7 +205,7 @@ def main():
             
             # Mute Hotkeys
             def toggle_mute_mic(*args):
-                print("TOGGLE MUTE MIC FIRED IN MAIN!")
+                logger.debug("Toggle mute mic triggered")
                 voro_app.config.mute_user_mic = not voro_app.config.mute_user_mic
                 state = "MUTED" if voro_app.config.mute_user_mic else "UNMUTED"
                 bridge.processing_state_updated.emit(f"USER MIC {state}")
@@ -280,6 +262,37 @@ def main():
             cycle_hotkey = getattr(voro_app.config, 'ui_cycle_mode_hotkey', 'ctrl+shift+v')
             keyboard.add_hotkey(cycle_hotkey, voro_app.cycle_activation_mode)
             logger.info(f"Cycle Mode hotkey registered: {cycle_hotkey}")
+
+            # Quick Prompts Hotkeys
+            def make_quick_prompt_handler(prompt_text):
+                def handler():
+                    logger.info(f"Triggering Quick Prompt: {prompt_text}")
+                    voro_app.inject_user_input(prompt_text)
+                return handler
+
+            for i in range(1, 4):
+                hk = getattr(voro_app.config, f'ui_quick_prompt_{i}_hotkey', '')
+                txt = getattr(voro_app.config, f'ui_quick_prompt_{i}_text', '')
+                if hk and txt:
+                    keyboard.add_hotkey(hk, make_quick_prompt_handler(txt))
+                    logger.info(f"Quick Prompt {i} hotkey registered: {hk}")
+                    
+            stop_hk = getattr(voro_app.config, 'ui_stop_hotkey', 'ctrl+shift+c')
+            keyboard.add_hotkey(stop_hk, voro_app.stop_current_task)
+            logger.info(f"Stop Task hotkey registered: {stop_hk}")
+
+            clear_hk = getattr(voro_app.config, 'ui_clear_session_hotkey', 'ctrl+shift+backspace')
+            keyboard.add_hotkey(clear_hk, bridge.clear_session.emit)
+            logger.info(f"Clear Session hotkey registered: {clear_hk}")
+
+            tray_hk = getattr(voro_app.config, 'ui_toggle_tray_hotkey', 'ctrl+shift+y')
+            keyboard.add_hotkey(tray_hk, bridge.toggle_tray.emit)
+            logger.info(f"Toggle Tray hotkey registered: {tray_hk}")
+
+            stealth_hk = getattr(voro_app.config, 'ui_stealth_hotkey', 'ctrl+shift+g')
+            keyboard.add_hotkey(stealth_hk, bridge.toggle_stealth.emit)
+            logger.info(f"Stealth Mode hotkey registered: {stealth_hk}")
+
             
         except Exception as e:
             logger.error(f"Failed to register global hotkeys: {e}")
@@ -288,6 +301,11 @@ def main():
         exit_code = qt_app.exec()
         
         # Shutdown core gracefully
+        try:
+            from app.core.ollama_manager import manager as ollama_manager
+            ollama_manager.shutdown()
+        except Exception:
+            pass
         voro_app.shutdown()
         sys.exit(exit_code)
         

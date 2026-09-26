@@ -20,7 +20,7 @@ class OpenRouterProvider(AIProvider):
         
     def generate(self, context: List[ConversationTurn], system_prompt: str, base64_image: str = None) -> AIResponse:
         if not self.api_key:
-            raise ValueError("OPENROUTER_API_KEY is missing or empty.")
+            raise ValueError("API Key is missing or empty.")
             
         start_time = time.time()
         
@@ -63,7 +63,8 @@ class OpenRouterProvider(AIProvider):
             "temperature": temp
         }
         
-        logger.info(f"[ai] Sending request to OpenRouter ({self.model})...")
+        provider_name = "Omni Route" if "localhost:20128" in self.base_url else "OpenRouter" if "openrouter" in self.base_url else "Google Gemini" if "googleapis" in self.base_url else "OpenAI"
+        logger.info(f"[ai] Sending request to {provider_name} ({self.model})...")
         
         def _do_post(req_payload):
             response = self.client.post(f"{self.base_url}/chat/completions", headers=headers, json=req_payload)
@@ -114,7 +115,7 @@ class OpenRouterProvider(AIProvider):
         
     def generate_stream(self, context: List[ConversationTurn], system_prompt: str, base64_image: str = None):
         if not self.api_key:
-            raise ValueError("OPENROUTER_API_KEY is missing or empty.")
+            raise ValueError("API Key is missing or empty.")
             
         messages = [{"role": "system", "content": system_prompt}]
         for i, turn in enumerate(context):
@@ -149,7 +150,8 @@ class OpenRouterProvider(AIProvider):
         }
         
         import json
-        logger.info(f"[ai] Sending streaming request to OpenRouter ({self.model})...")
+        provider_name = "Omni Route" if "localhost:20128" in self.base_url else "OpenRouter" if "openrouter" in self.base_url else "Google Gemini" if "googleapis" in self.base_url else "OpenAI"
+        logger.info(f"[ai] Sending streaming request to {provider_name} ({self.model})...")
         
         def _do_stream(req_payload):
             with self.client.stream("POST", f"{self.base_url}/chat/completions", headers=headers, json=req_payload) as response:

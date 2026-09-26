@@ -28,10 +28,11 @@ class VoroApplication:
     Combines audio, STT, session management, and AI orchestration.
     """
     def __init__(self):
+        from app.core.config import load_config
         self.state = ApplicationState.STARTING
         logger.info("Voro starting...")
         
-        self.config = None
+        self.config = load_config()
         self.on_answer_callback = None
         self.on_privacy_status_callback = None
         self.on_mic_status_callback = None
@@ -46,8 +47,7 @@ class VoroApplication:
         self.vad = None
         self.stt = None
         self.session_manager = SessionManager()
-        self.tts_worker = TTSWorker(self._tts_ready_handler, self.config)
-        self.tts_worker.start()
+        self.tts_worker = None
         self.intent_detector = IntentDetector()
         self.context_manager = ContextManager()
         self.ai_provider = None
@@ -85,6 +85,9 @@ class VoroApplication:
         try:
             self.config = load_config()
             logger.info("Configuration loaded")
+            
+            self.tts_worker = TTSWorker(self._tts_ready_handler, self.config)
+            self.tts_worker.start()
             
             # Initialize Window Privacy/Display Architecture
             from app.platform.windows.privacy import check_privacy_capabilities
@@ -134,9 +137,13 @@ class VoroApplication:
             
             # Initialize STT
             logger.info("STT initializing...")
+            sz = self.config.stt_model_size
+            if sz == 'base.en': sz = 'small.en'
+            if sz == 'base': sz = 'small'
             self.stt = SpeechToText(
-                model_size=self.config.stt_model_size,
-                device=getattr(self.config, 'stt_device', 'cpu')
+                model_size=sz,
+                device=getattr(self.config, 'stt_device', 'cpu'),
+                model_dir=getattr(self.config, 'stt_model_dir', '')
             )
             self.stt.initialize()
             logger.info("STT ready.")
@@ -186,6 +193,16 @@ class VoroApplication:
     def _tts_ready_handler(self, filepath: str):
         if hasattr(self, 'on_tts_audio_callback') and self.on_tts_audio_callback:
             self.on_tts_audio_callback(filepath)
+
+    def stop_current_task(self):
+        """Halts any ongoing AI generation and TTS playback."""
+        import uuid
+        self.latest_request_id = str(uuid.uuid4())
+        self.tts_worker.stop_and_clear()
+        if hasattr(self, 'on_tts_stop_callback') and self.on_tts_stop_callback:
+            self.on_tts_stop_callback()
+        if hasattr(self, 'on_processing_state_callback') and self.on_processing_state_callback:
+            self.on_processing_state_callback("Task Stopped.")
 
     def inject_user_input(self, text: str):
         """Injects text into the pipeline as if the user spoke it (e.g., from OCR)."""
@@ -327,7 +344,7 @@ class VoroApplication:
                 logger.info(f"[stt] Transcribing {speaker}...")
                 try:
                     prompt = self.config.stt_context_prompt
-                    if self.config.ai_tone == "Conversational Hinglish (Script)":
+                    if self.config.ai_tone == "Conversational (Hinglish)":
                         prompt += " This is a bilingual interview. Apne bare mein batao, hum system design aur coding discuss karenge. Namaste."
                         
                     result = self.stt.transcribe(
@@ -430,7 +447,7 @@ class VoroApplication:
                     reqs = self.intelligence_router.route(req.intent, req.text, context)
                     req.trace.routing_ms = (time.time() - t_route) * 1000
                     
-                    if reqs.screen:
+                    if reqs.screen and getattr(self.config, 'ui_vision_enabled', True):
                         logger.info(f"[{req.request_id}] Screen context requested")
                         if hasattr(self, 'on_privacy_status_callback') and self.on_privacy_status_callback:
                             self.on_privacy_status_callback("CAPTURING SCREEN")
@@ -639,9 +656,30 @@ class VoroApplication:
             self.on_activation_switched_callback(next_mode)
 
     def reload_ai_provider(self):
-        logger.info("AI Provider initializing...")
-        ai_coding_provider = None
-        ai_vision_provider = None
+        logger.info("AI Provider initializing (NORVI AGENT MODE)...")
+        from app.ai.openrouter import OpenRouterProvider
+        
+        # Hardcoded to Ollama with gemma4:cloud for Agency
+        OLLAMA_MODEL = "gemma4:cloud"
+        
+        self.ai_provider = OpenRouterProvider(
+            api_key="ollama_local",
+            model=OLLAMA_MODEL,
+            base_url="http://localhost:11434/v1"
+        )
+        ai_coding_provider = self.ai_provider
+        ai_vision_provider = None # Text-only fallback for vision via OCR
+        
+        from app.answer.engine import AnswerEngine
+        self.answer_engine = AnswerEngine(
+            ai_provider=self.ai_provider,
+            context_manager=self.context_manager,
+            mm_engine=self.mm_engine,
+            max_context_turns=self.config.conversation_history_depth * 2,
+            ai_coding_provider=ai_coding_provider,
+            ai_vision_provider=ai_vision_provider
+        )
+        return
         
         mode = getattr(self.config, 'activation_mode', 'basic')
         
@@ -650,13 +688,42 @@ class VoroApplication:
             mode = 'local'
             
         from app.ai.openrouter import OpenRouterProvider
-        if mode == 'premium':
-            logger.info(f"Using Premium AI Provider with model: {self.config.premium_model}")
+        
+        if getattr(self.config, 'developer_mode', False):
+            import os
+            omni_key = getattr(self.config, 'omni_route_api_key', '') or os.environ.get("OMNIROUTER_API_KEY", "") or os.environ.get("OMNI_ROUTE_API_KEY", "")
+            omni_model = getattr(self.config, 'omni_route_model', '') or os.environ.get("OMNIROUTER_MODEL", "") or os.environ.get("OMNI_ROUTE_MODEL", "") or "developer/model"
+            logger.info(f"Using Developer Mode (Omni Route Proxy) with model: {omni_model}")
             self.ai_provider = OpenRouterProvider(
-                api_key=self.config.premium_api_key,
-                model=self.config.premium_model,
-                base_url=self.config.openrouter_base_url
+                api_key=omni_key,
+                model=omni_model,
+                base_url="http://localhost:20128/v1"
             )
+            ai_coding_provider = self.ai_provider
+            ai_vision_provider = self.ai_provider
+        elif mode == 'premium':
+            provider = getattr(self.config, 'premium_provider', 'OpenAI')
+            logger.info(f"Using Premium AI Provider ({provider}) with model: {self.config.premium_model}")
+            if "Anthropic" in provider:
+                from app.ai.anthropic_provider import AnthropicProvider
+                self.ai_provider = AnthropicProvider(
+                    api_key=self.config.premium_api_key,
+                    model=self.config.premium_model,
+                    base_url="https://api.anthropic.com/v1/messages"
+                )
+            elif "Google" in provider:
+                self.ai_provider = OpenRouterProvider(
+                    api_key=self.config.premium_api_key,
+                    model=self.config.premium_model,
+                    base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
+                )
+            else:
+                self.ai_provider = OpenRouterProvider(
+                    api_key=self.config.premium_api_key,
+                    model=self.config.premium_model,
+                    base_url="https://api.openai.com/v1"
+                )
+            
             ai_coding_provider = self.ai_provider
             ai_vision_provider = self.ai_provider
             

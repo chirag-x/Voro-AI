@@ -1,20 +1,49 @@
+# Virtual Environments
 .venv/
-.env*
+venv/
+env/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Python Cache
 __pycache__/
 *.pyc
-.pytest_cache/
+*.pyo
+*.pyd
+.Python
+
+# IDE & Tooling
 .idea/
 .vscode/
+.pytest_cache/
+
+# Runtime Data & Logs
 logs/
 *.log
-context.json
-*.tmp
-*.temp
+temp_tts/
 tmp/
 temp/
+*.tmp
+*.temp
+context.json
+profiles.json
+
+# Build Outputs (PyInstaller)
+build/
+dist/
+*.egg-info/
+*.manifest
+
+# Downloaded Models
 models/
+STT_models/
 *.bin
 *.pt
 *.pth
-/temp_tts/
-/tests/
+
+# OS Files
+.DS_Store
+Thumbs.db

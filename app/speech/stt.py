@@ -1,3 +1,6 @@
+import os
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
 import time
 import numpy as np
 from faster_whisper import WhisperModel
@@ -10,15 +13,25 @@ class SpeechToText:
     Provides a clean abstraction so the rest of the application
     does not depend directly on whisper implementation details.
     """
-    def __init__(self, model_size: str = "tiny.en", device: str = "cpu", compute_type: str = "int8"):
+    def __init__(self, model_size: str = "tiny.en", device: str = "cpu", compute_type: str = "int8", model_dir: str = ""):
         self.model_size = model_size
         self.device = device
         self.compute_type = compute_type
+        self.model_dir = model_dir
         self.model = None
 
     def initialize(self):
         """Initialize and load the model."""
         logger.info(f"Loading STT model '{self.model_size}' on {self.device}...")
+        
+        # Fix: Require stt_model_dir to prevent auto-downloading to C drive
+        if not self.model_dir or not self.model_dir.strip():
+            raise FileNotFoundError("STT Models Directory is not set. Please select the directory in settings where models are downloaded.")
+            
+        model_path = os.path.join(self.model_dir.strip(), f"faster-whisper-{self.model_size}")
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"STT model '{self.model_size}' not found in '{model_path}'. Please download it via the Offline Downloads section.")
+        
         start = time.time()
         
         # Determine compute type based on device
@@ -27,9 +40,11 @@ class SpeechToText:
             
         try:
             self.model = WhisperModel(
-                self.model_size, 
+                model_path, 
                 device=self.device, 
-                compute_type=self.compute_type
+                compute_type=self.compute_type,
+                cpu_threads=4,
+                local_files_only=True
             )
         except Exception as e:
             if self.device == "cuda":
@@ -37,9 +52,11 @@ class SpeechToText:
                 self.device = "cpu"
                 self.compute_type = "int8"
                 self.model = WhisperModel(
-                    self.model_size, 
+                    model_path, 
                     device=self.device, 
-                    compute_type=self.compute_type
+                    compute_type=self.compute_type,
+                cpu_threads=4,
+                    local_files_only=True
                 )
             else:
                 raise
@@ -87,10 +104,12 @@ class SpeechToText:
                 logger.warning(f"CUDA inference failed ({err_str}). Falling back to CPU permanently...")
                 self.device = "cpu"
                 self.compute_type = "int8"
+                model_path = os.path.join(self.model_dir.strip(), f'faster-whisper-{self.model_size}')
                 self.model = WhisperModel(
-                    self.model_size,
+                    model_path,
                     device=self.device,
-                    compute_type=self.compute_type
+                    compute_type=self.compute_type,
+                    cpu_threads=4
                 )
                 
                 # Retry on CPU
@@ -127,6 +146,19 @@ class SpeechToText:
             
             text = text.strip()
             
+            # Drop famous Whisper silence hallucinations
+            lower_txt = text.lower().strip()
+            hallucinations = [
+                "thank you", "thank you.", "thank you!", 
+                "thank you so much for joining us", "thank you so much for joining us.",
+                "thank you for joining us", "thank you for joining us.",
+                "thank you for watching", "thank you for watching.",
+                "thanks for watching", "thanks for watching.",
+                "amara.org", "amara.org."
+            ]
+            if lower_txt in hallucinations:
+                text = ""
+                
             # If after stripping the prompt, what remains is tiny or empty, just drop it
             if len(text) < 3 or (len(set(text.lower().split()) - set(initial_prompt.lower().split())) <= 1):
                 text = ""

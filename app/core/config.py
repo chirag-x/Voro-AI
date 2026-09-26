@@ -8,12 +8,17 @@ class VoroConfig(BaseSettings):
     Configuration for the Voro application.
     Loaded from environment variables or .env file.
     """
+    first_run_completed: bool = Field(default=False)
     # Activation Mode
     activation_mode: str = Field(default="basic") # "premium", "basic", "local"
+    developer_mode: bool = Field(default=False, env="DEVELOPER_MODE")
     
     # Premium AI (Paid API)
+    premium_provider: str = Field(default="OpenAI")
     premium_api_key: str = Field(default="")
-    premium_model: str = Field(default="openai/gpt-4o")
+    premium_model: str = Field(default="gpt-4o")
+    omni_route_api_key: str = Field(default="", env="OMNI_ROUTE_API_KEY")
+    omni_route_model: str = Field(default="", env="OMNI_ROUTE_MODEL")
     
     # OCR Customization
     tesseract_path: str = Field(default=r"C:\Program Files\Tesseract-OCR\tesseract.exe")
@@ -29,14 +34,19 @@ class VoroConfig(BaseSettings):
     audio_chunk_size: int = Field(default=1024)
 
     ui_opacity: int = Field(default=100)
-    ui_question_color: str = Field(default="#555555")
-    ui_answer_color: str = Field(default="#0055A4")
+    ui_you_heading_color: str = Field(default="#E53935")       # YOU heading
+    ui_interviewer_heading_color: str = Field(default="#FF9900") # INTERVIEWER heading
+    ui_voro_heading_color: str = Field(default="#0055A4")      # VORO heading
     ui_font_size: int = Field(default=13)
-    ui_always_on_top: bool = Field(default=True)
     ui_win_x: int = Field(default=-1)
     ui_win_y: int = Field(default=-1)
     ui_win_w: int = Field(default=400)
     ui_win_h: int = Field(default=400)
+    
+    ui_settings_win_x: int = Field(default=-1)
+    ui_settings_win_y: int = Field(default=-1)
+    ui_settings_win_w: int = Field(default=900)
+    ui_settings_win_h: int = Field(default=650)
     ui_show_in_taskbar: bool = Field(default=False)
     ui_show_tray: bool = Field(default=True)
     ui_always_on_top: bool = Field(default=False, env="UI_ALWAYS_ON_TOP")
@@ -50,15 +60,31 @@ class VoroConfig(BaseSettings):
 
     ui_global_hotkey: str = Field(default="ctrl+space", env="UI_GLOBAL_HOTKEY")
     ui_hint_hotkey: str = Field(default="ctrl+shift+h", env="UI_HINT_HOTKEY")
-    ui_snip_hotkey: str = Field(default="ctrl+shift+s", env="UI_SNIP_HOTKEY")
+    ui_snip_hotkey: str = Field(default="ctrl+shift+p", env="UI_SNIP_HOTKEY")
+    ui_stealth_hotkey: str = Field(default="ctrl+shift+g", env="UI_STEALTH_HOTKEY")
     ui_taskbar_hotkey: str = Field(default="ctrl+shift+t", env="UI_TASKBAR_HOTKEY")
+    ui_clear_session_hotkey: str = Field(default="ctrl+shift+backspace", env="UI_CLEAR_SESSION_HOTKEY")
+    ui_toggle_tray_hotkey: str = Field(default="ctrl+shift+y", env="UI_TOGGLE_TRAY_HOTKEY")
     ui_mute_mic_hotkey: str = Field(default="ctrl+shift+m", env="UI_MUTE_MIC_HOTKEY")
     ui_mute_sys_hotkey: str = Field(default="ctrl+shift+a", env="UI_MUTE_SYS_HOTKEY")
     ui_cycle_mode_hotkey: str = Field(default="ctrl+shift+v", env="UI_CYCLE_MODE_HOTKEY")
     ui_maximize_hotkey: str = Field(default="F11", env="UI_MAXIMIZE_HOTKEY")
     ui_tts_mute_hotkey: str = Field(default="ctrl+shift+x", env="UI_TTS_MUTE_HOTKEY")
     ui_tts_muted: bool = Field(default=False, env="UI_TTS_MUTED")
+    ui_quick_prompt_1_hotkey: str = Field(default="ctrl+shift+1", env="UI_QUICK_PROMPT_1_HOTKEY")
+    ui_quick_prompt_1_text: str = Field(default="Give me the correct answer for the question currently on the screen.", env="UI_QUICK_PROMPT_1_TEXT")
+    ui_quick_prompt_2_hotkey: str = Field(default="ctrl+shift+2", env="UI_QUICK_PROMPT_2_HOTKEY")
+    ui_quick_prompt_2_text: str = Field(default="Explain the code on my screen.", env="UI_QUICK_PROMPT_2_TEXT")
+    ui_quick_prompt_3_hotkey: str = Field(default="ctrl+shift+3", env="UI_QUICK_PROMPT_3_HOTKEY")
+    ui_quick_prompt_3_text: str = Field(default="Summarize the text on my screen.", env="UI_QUICK_PROMPT_3_TEXT")
+    ui_voice: str = Field(default="en-US-AriaNeural", env="UI_VOICE")
+    ui_capture_mode: str = Field(default="monitor", env="UI_CAPTURE_MODE")
+    ui_capture_target: str = Field(default="1", env="UI_CAPTURE_TARGET")
+    ui_auto_update: bool = Field(default=True, env="UI_AUTO_UPDATE")
+    ui_stop_hotkey: str = Field(default="ctrl+shift+c", env="UI_STOP_HOTKEY")
+    ui_vision_enabled: bool = Field(default=True, env="UI_VISION_ENABLED")
     ui_tts_rate: str = Field(default="+0%", env="UI_TTS_RATE")
+    ui_tts_output_device: str = Field(default="Default System Device", env="UI_TTS_OUTPUT_DEVICE")
     hint_mode_active: bool = Field(default=False)  # Runtime only
 
     # AI Options
@@ -69,6 +95,7 @@ class VoroConfig(BaseSettings):
     ai_tone: str = Field(default="Conversational (Script)", env="AI_TONE")
     stt_model_size: str = Field(default="tiny.en", env="STT_MODEL_SIZE")
     stt_device: str = Field(default="cpu", env="STT_DEVICE")
+    stt_model_dir: str = Field(default="", env="STT_MODEL_DIR")
     stt_context_prompt: str = Field(default="This is a highly technical software engineering interview covering programming, system design, and coding.", env="STT_CONTEXT_PROMPT")
     enable_web_search: bool = Field(default=False, env="ENABLE_WEB_SEARCH")
     enable_auto_monitor: bool = Field(default=False, env="ENABLE_AUTO_MONITOR")

@@ -3,15 +3,15 @@
     "profiles": {
         "Default": {
             "interview": {
-                "role": "",
-                "company": "",
-                "company_details": "",
+                "role": "Full Stack Devloper",
+                "company": "Vertex Studio",
+                "company_details": "it is a Web degin and marketing agency in gwalior, it is a statup",
                 "important_info": "",
                 "interview_type": "",
                 "technology_stack": []
             },
             "personal": {
-                "name": "",
+                "name": "Chirag Sharma",
                 "education": "",
                 "projects": "",
                 "skills": [],

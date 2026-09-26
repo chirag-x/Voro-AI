@@ -1,4 +1,4 @@
-﻿    def cycle_activation_mode(self):
+    def cycle_activation_mode(self):
         modes = ['premium', 'basic', 'local']
         current = getattr(self.config, 'activation_mode', 'basic')
         try:

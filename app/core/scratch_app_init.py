@@ -1,4 +1,4 @@
-﻿            logger.info("AI Provider initializing...")
+            logger.info("AI Provider initializing...")
             ai_coding_provider = None
             ai_vision_provider = None
             

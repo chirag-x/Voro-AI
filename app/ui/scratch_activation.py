@@ -1,4 +1,4 @@
-﻿
+
     def setup_activation_page(self):
         page = QWidget()
         main_layout = QVBoxLayout(page)
@@ -40,16 +40,39 @@
         premium_layout = QVBoxLayout(page_premium)
         premium_layout.setContentsMargins(0, 0, 0, 0)
         
-        premium_layout.addWidget(QLabel("Premium API Key (OpenRouter):"))
+        premium_layout.addWidget(QLabel("Premium AI Provider:"))
+        from app.ui.settings import NoScrollComboBox
+        self.premium_provider_combo = NoScrollComboBox()
+        self.premium_provider_combo.addItems(["OpenAI", "Anthropic (Claude)", "Google (Gemini)"])
+        self.premium_provider_combo.setCurrentText(getattr(self.config, 'premium_provider', 'OpenAI'))
+        premium_layout.addWidget(self.premium_provider_combo)
+        
+        self.lbl_premium_key = QLabel("API Key:")
+        premium_layout.addWidget(self.lbl_premium_key)
         self.premium_key_input = QLineEdit()
         self.premium_key_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.premium_key_input.setText(getattr(self.config, 'premium_api_key', ''))
         premium_layout.addWidget(self.premium_key_input)
         
-        premium_layout.addWidget(QLabel("Model Name (e.g. openai/gpt-4o, anthropic/claude-3.5-sonnet):"))
+        self.lbl_premium_model = QLabel("Model Name:")
+        premium_layout.addWidget(self.lbl_premium_model)
         self.premium_model_input = QLineEdit()
-        self.premium_model_input.setText(getattr(self.config, 'premium_model', 'openai/gpt-4o'))
+        self.premium_model_input.setText(getattr(self.config, 'premium_model', 'gpt-4o'))
         premium_layout.addWidget(self.premium_model_input)
+        
+        def _on_premium_provider_changed(text):
+            if "OpenAI" in text:
+                self.lbl_premium_key.setText("OpenAI API Key:")
+                self.lbl_premium_model.setText("Model Name (e.g. gpt-4o):")
+            elif "Anthropic" in text:
+                self.lbl_premium_key.setText("Anthropic API Key:")
+                self.lbl_premium_model.setText("Model Name (e.g. claude-3-5-sonnet-20240620):")
+            elif "Google" in text:
+                self.lbl_premium_key.setText("Google Gemini API Key:")
+                self.lbl_premium_model.setText("Model Name (e.g. gemini-1.5-pro):")
+                
+        self.premium_provider_combo.currentTextChanged.connect(_on_premium_provider_changed)
+        _on_premium_provider_changed(self.premium_provider_combo.currentText())
         
         self.btn_validate_premium = QPushButton("Validate Premium Key & Model")
         self.btn_validate_premium.clicked.connect(self._validate_premium)
@@ -201,7 +224,16 @@
         self.btn_validate_premium.setEnabled(False)
         
         try:
-            r = httpx.get("https://openrouter.ai/api/v1/auth/key", headers={"Authorization": f"Bearer {key}"}, timeout=5.0)
+            if "OpenAI" in getattr(self, 'premium_provider_combo', NoScrollComboBox()).currentText():
+                url = "https://api.openai.com/v1/models"
+                headers = {"Authorization": f"Bearer {key}"}
+            else:
+                QMessageBox.information(self, "Notice", "Format accepted. True validation will occur on first request.")
+                self.btn_validate_premium.setText("Validate Premium Key & Model")
+                self.btn_validate_premium.setEnabled(True)
+                return
+
+            r = httpx.get(url, headers=headers, timeout=5.0)
             if r.status_code == 200:
                 QMessageBox.information(self, "Success", f"API Key is valid!\nModel: {model} is ready.")
             else:

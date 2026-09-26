@@ -1,6 +1,7 @@
 import logging
 import sys
-
+import os
+from logging.handlers import RotatingFileHandler
 import re
 
 class RedactingFormatter(logging.Formatter):
@@ -24,13 +25,28 @@ def setup_logging():
     logger.setLevel(logging.INFO)
 
     if not logger.handlers:
-        handler = logging.StreamHandler(sys.stdout)
         formatter = RedactingFormatter(
             fmt="%(asctime)s | %(levelname)-7s | %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S"
         )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
+        
+        # Console handler
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+        
+        # File handler
+        try:
+            log_dir = os.path.join(os.getcwd(), "logs")
+            os.makedirs(log_dir, exist_ok=True)
+            log_file = os.path.join(log_dir, "voro.log")
+            
+            file_handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=2, encoding="utf-8")
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+        except Exception as e:
+            # Fallback if we can't write to the logs directory
+            print(f"Warning: Could not setup file logging: {e}")
 
     return logger
 

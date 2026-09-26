@@ -8,7 +8,7 @@ def test_redacting_formatter():
     # Test API Key Redaction
     record = logging.LogRecord(
         name="test", level=logging.INFO, pathname="", lineno=0,
-        msg="Using key sk-or-v1-REDACTED",
+        msg="Using key sk-or-v1-YOUR_TEST_KEY_HERE_REDACTED",
         args=(), exc_info=None
     )
     formatted = formatter.format(record)

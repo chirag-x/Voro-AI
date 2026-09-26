@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 import os
-=======
-﻿import os
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
 import sys
 import json
 import httpx
@@ -51,11 +47,7 @@ class Updater(QObject):
         def parse(v): return tuple(map(int, v.strip('v').split('.')))
         try:
             return parse(remote) > parse(local)
-<<<<<<< HEAD
         except Exception:
-=======
-        except:
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
             return False
 
     def download_and_install(self, download_url: str):

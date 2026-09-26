@@ -65,7 +65,6 @@ def _make_section_header(title: str, theme: dict) -> "QLabel":
     )
     return lbl
 
-<<<<<<< HEAD
 
 import threading
 import time
@@ -139,8 +138,6 @@ class ModelDownloadThread(QThread):
         finally:
             hf_utils.tqdm = self._orig_tqdm
 
-=======
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
 class SettingsDialog(QDialog):
     def __init__(self, context_manager: ContextManager, parent=None):
         super().__init__(parent)
@@ -336,11 +333,7 @@ class SettingsDialog(QDialog):
         
         self.sidebar = QListWidget()
         self.sidebar.setFixedWidth(150)
-<<<<<<< HEAD
         self.sidebar.addItems(["Norvi", "Interface", "Vision", "Audio", "Profile", "Company Info", "Other", "Updates", "Help"])
-=======
-        self.sidebar.addItems(["Activation", "Interface", "Vision", "Audio", "Profile", "Company Info", "Other", "Updates", "Help"])
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
         self.sidebar.currentRowChanged.connect(self.change_page)
         outer_layout.addWidget(self.sidebar)
         
@@ -364,11 +357,7 @@ class SettingsDialog(QDialog):
         self._last_selected_profile = self.context_manager.active_profile_name
         
         # Signature
-<<<<<<< HEAD
         self.sig_label = QLabel("Designed and Developed by <a href='https://nor-vi.in/' style='color:#0055A4; text-decoration:none;'>Norvi Agency</a>")
-=======
-        self.sig_label = QLabel("Designed and Developed by <a href='https://chirag-portfolio-v3.netlify.app/' style='color:#0055A4; text-decoration:none;'>Chirag Sharma</a>")
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
         self.sig_label.setOpenExternalLinks(True)
         self.sig_label.setAlignment(Qt.AlignRight)
         self.sig_label.setStyleSheet(f"font-size: 11px; color: {self.theme.get('base_text', '#888')}; margin-bottom: 10px;")
@@ -388,11 +377,7 @@ class SettingsDialog(QDialog):
         
         outer_layout.addLayout(right_layout)
         
-<<<<<<< HEAD
         # Privacy flag is only applied by OverlayWindow, not the settings dialog
-=======
-        self._apply_privacy_flag()
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
         
     def change_page(self, index):
         self.pages.setCurrentIndex(index)
@@ -406,12 +391,6 @@ class SettingsDialog(QDialog):
         from PySide6.QtWidgets import QKeySequenceEdit, QPushButton, QWidget, QHBoxLayout
         from PySide6.QtGui import QKeySequence
         from PySide6.QtCore import Qt
-<<<<<<< HEAD
-        
-        container = QWidget()
-        layout = QHBoxLayout(container)
-        layout.setContentsMargins(0, 0, 0, 0)
-=======
         
         container = QWidget()
         layout = QHBoxLayout(container)
@@ -446,273 +425,6 @@ class SettingsDialog(QDialog):
         
         layout.addWidget(hk)
         layout.addWidget(btn)
-        layout.addStretch()
-        
-        # Monkey-patch text() so the existing save logic works without modification
-        container.text = lambda: hk.keySequence().toString(QKeySequence.PortableText).lower().replace('meta', 'win')
-        # Handle setFixedWidth if it was called on the return value
-        container.setFixedWidth = lambda w: None
-        return container
-
-    def _create_toggle_btn(self, default_checked, text_enabled, text_disabled, inverted=False):
-        from PySide6.QtWidgets import QPushButton
-        from PySide6.QtCore import Qt
-        btn = QPushButton()
-        btn.setCheckable(True)
-        btn.setChecked(default_checked)
-        btn.setCursor(Qt.PointingHandCursor)
-        def _update(checked):
-            is_active = not checked if inverted else checked
-            if is_active:
-                btn.setText(text_enabled)
-                btn.setStyleSheet("QPushButton { background-color: #0078D7; color: white; border: none; padding: 6px; border-radius: 4px; font-weight: bold; }")
-            else:
-                btn.setText(text_disabled)
-                btn.setStyleSheet("QPushButton { background-color: #444; color: #aaa; border: 1px solid #555; padding: 6px; border-radius: 4px; font-weight: bold; }")
-        btn.toggled.connect(_update)
-        _update(default_checked)
-        return btn
-
-    def setup_activation_page(self):
-        page = QWidget()
-        main_layout = QVBoxLayout(page)
-        
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; } QScrollArea > QWidget > QWidget { background: transparent; }")
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
-        
-        seq_str = str(default_val).title()
-        hk = QKeySequenceEdit(QKeySequence(seq_str))
-        hk.setFixedWidth(120)
-        
-<<<<<<< HEAD
-        # Prevent accidental edits while keeping normal appearance
-        hk.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        hk.setFocusPolicy(Qt.NoFocus)
-        
-        btn = QPushButton("Edit")
-        btn.setFixedWidth(50)
-        btn.setCursor(Qt.PointingHandCursor)
-        
-        def _on_btn_clicked():
-            if btn.text() == "Edit":
-                btn.setText("Save")
-                btn.setStyleSheet("QPushButton { background-color: #0078D7; color: white; border: none; font-weight: bold; border-radius: 4px; padding: 2px; }")
-                hk.setAttribute(Qt.WA_TransparentForMouseEvents, False)
-                hk.setFocusPolicy(Qt.StrongFocus)
-                hk.setFocus()
-            else:
-                btn.setText("Edit")
-                btn.setStyleSheet("")
-                hk.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-                hk.setFocusPolicy(Qt.NoFocus)
-                
-        btn.clicked.connect(_on_btn_clicked)
-        
-        layout.addWidget(hk)
-        layout.addWidget(btn)
-=======
-        from PySide6.QtWidgets import QFrame, QFormLayout
-        
-        mode_frame = QFrame()
-        mode_frame.setObjectName("ModeBox")
-        mode_frame.setStyleSheet(f"#ModeBox {{ border: 1px solid {self.theme.get('border', '#555')}; border-radius: 6px; }}")
-        mode_layout = QVBoxLayout(mode_frame)
-        mode_layout.setContentsMargins(15, 15, 15, 15)
-        
-        mode_form = QFormLayout()
-        mode_form.setLabelAlignment(Qt.AlignLeft)
-        mode_form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
-        
-        self.mode_dropdown = NoScrollComboBox()
-        self.mode_dropdown.addItems([
-            "Premium Activation (Paid AI)",
-            "Basic Activation (Free AI)",
-            "Free Local Activation (Ollama)"
-        ])
-        self.mode_dropdown.setFixedWidth(250)
-        mode_form.addRow("<b>Activation Mode:</b>", self.mode_dropdown)
-        mode_layout.addLayout(mode_form)
-        mode_layout.addWidget(QLabel("<small><i>Voro will ONLY use the mode selected above.</i></small>"))
-        layout.addWidget(mode_frame)
-        
-        from PySide6.QtWidgets import QFrame
-        line = QFrame()
-        line.setFrameShape(QFrame.Shape.HLine)
-        line.setFrameShadow(QFrame.Shadow.Sunken)
-        layout.addWidget(line)
-        
-        self.stack = QStackedWidget()
-        layout.addWidget(self.stack)
-        
-        # -----------------------------------------------------
-        # 1. Premium Page
-        # -----------------------------------------------------
-        page_premium = QWidget()
-        premium_layout = QVBoxLayout(page_premium)
-        premium_layout.setContentsMargins(0, 0, 0, 0)
-        
-        premium_layout.addWidget(QLabel("Premium API Key (OpenRouter):"))
-        self.premium_key_input = QLineEdit()
-        self.premium_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.premium_key_input.setText(getattr(self.config, 'premium_api_key', ''))
-        premium_layout.addWidget(self.premium_key_input)
-        
-        premium_layout.addWidget(QLabel("Model Name (e.g. openai/gpt-4o, anthropic/claude-3.5-sonnet):"))
-        self.premium_model_input = QLineEdit()
-        self.premium_model_input.setText(getattr(self.config, 'premium_model', 'openai/gpt-4o'))
-        premium_layout.addWidget(self.premium_model_input)
-        
-        self.btn_validate_premium = QPushButton("Validate Premium Key & Model")
-        self.btn_validate_premium.clicked.connect(self._validate_premium)
-        premium_layout.addWidget(self.btn_validate_premium)
-        
-        premium_layout.addStretch()
-        self.stack.addWidget(page_premium)
-        
-        # -----------------------------------------------------
-        # 2. Basic Page
-        # -----------------------------------------------------
-        page_basic = QWidget()
-        basic_layout = QVBoxLayout(page_basic)
-        basic_layout.setContentsMargins(0, 0, 0, 0)
-        
-        basic_layout.addWidget(QLabel("OpenRouter API Key:"))
-        key_layout = QHBoxLayout()
-        self.key_input = QLineEdit()
-        self.key_input.setEchoMode(QLineEdit.EchoMode.Password)
-        if self.config.openrouter_api_key:
-            self.key_input.setText(self.config.openrouter_api_key)
-        key_layout.addWidget(self.key_input)
-        
-        if not getattr(sys, 'frozen', False):
-            self.btn_show_key = QPushButton("Show Key")
-            self.btn_show_key.setCheckable(True)
-            self.btn_show_key.toggled.connect(self.toggle_key_visibility)
-            key_layout.addWidget(self.btn_show_key)
-        basic_layout.addLayout(key_layout)
-        
-        basic_layout.addWidget(QLabel("Activation Models:"))
-        self.model_inputs = []
-        self.model_status_labels = []
-        
-        models = [
-            self.config.openrouter_model,
-            self.config.openrouter_model_2,
-            self.config.openrouter_model_3,
-            self.config.openrouter_model_4,
-            self.config.openrouter_model_5
-        ]
-        
-        for i, val in enumerate(models):
-            h = QHBoxLayout()
-            lbl = QLabel(f"Model {i+1}:")
-            lbl.setFixedWidth(60)
-            le = QLineEdit(val)
-            self.model_inputs.append(le)
-            status_lbl = QLabel("")
-            status_lbl.setFixedWidth(30)
-            self.model_status_labels.append(status_lbl)
-            
-            h.addWidget(lbl)
-            h.addWidget(le)
-            h.addWidget(status_lbl)
-            basic_layout.addLayout(h)
-            
-        self.btn_validate = QPushButton("Validate Key & Models")
-        self.btn_validate.clicked.connect(self.validate_models)
-        basic_layout.addWidget(self.btn_validate)
-        
-        active_model_layout = QHBoxLayout()
-        active_model_layout.addWidget(QLabel("Active Model:"))
-        self.active_model_combo = NoScrollComboBox()
-        self.active_model_combo.addItems([self.config.openrouter_model, self.config.openrouter_model_2, self.config.openrouter_model_3, self.config.openrouter_model_4, self.config.openrouter_model_5])
-        self.active_model_combo.setCurrentText(self.config.openrouter_model)
-        active_model_layout.addWidget(self.active_model_combo)
-        basic_layout.addLayout(active_model_layout)
-        
-        for le in self.model_inputs:
-            le.textChanged.connect(self._sync_active_model_combo)
-            
-        basic_layout.addStretch()
-        self.stack.addWidget(page_basic)
-        
-        # -----------------------------------------------------
-        # 3. Local Page
-        # -----------------------------------------------------
-        page_local = QWidget()
-        local_layout = QVBoxLayout(page_local)
-        local_layout.setContentsMargins(0, 0, 0, 0)
-        
-        l_frame = QFrame()
-        l_frame.setObjectName("LBox")
-        l_frame.setStyleSheet(f"#LBox {{ border: 1px solid {self.theme.get('border', '#555')}; border-radius: 6px; }}")
-        l_layout = QVBoxLayout(l_frame)
-        l_layout.setContentsMargins(15, 15, 15, 15)
-        
-        l_form = QFormLayout()
-        l_form.setLabelAlignment(Qt.AlignLeft)
-        l_form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
-        
-        self.ollama_chat_combo = NoScrollComboBox()
-        self.ollama_chat_combo.setEditable(True)
-        self.ollama_chat_combo.setMinimumWidth(200)
-        l_form.addRow("Ollama Chat Model:", self.ollama_chat_combo)
-        
-        self.ollama_coding_combo = NoScrollComboBox()
-        self.ollama_coding_combo.setEditable(True)
-        self.ollama_coding_combo.addItem("(none - use Chat model)")
-        self.ollama_coding_combo.setMinimumWidth(200)
-        l_form.addRow("Ollama Coding Model:", self.ollama_coding_combo)
-        
-        l_layout.addLayout(l_form)
-        l_layout.addWidget(QLabel("<small><i>Coding model is used for code questions and screen analysis. Leave as '(none)' to use Chat model.</i></small>"))
-        local_layout.addWidget(l_frame)
-        
-        
-        
-        self.btn_validate_local = QPushButton("Fetch & Validate Local Models")
-        self.btn_validate_local.clicked.connect(self._validate_local)
-        local_layout.addWidget(self.btn_validate_local)
-        
-        # Initial load
-        self._validate_local(silent=True)
-            
-        self.ollama_chat_combo.setCurrentText(self.config.ollama_model)
-        coding_model_saved = getattr(self.config, 'ollama_coding_model', '')
-        if coding_model_saved: self.ollama_coding_combo.setCurrentText(coding_model_saved)
-        else: self.ollama_coding_combo.setCurrentText("(none - use Chat model)")
-            
-
-            
-        local_layout.addStretch()
-        self.stack.addWidget(page_local)
-        
-        # -----------------------------------------------------
-        # Setup Logic
-        # -----------------------------------------------------
-        current_mode = getattr(self.config, 'activation_mode', 'basic')
-        if current_mode == 'premium': self.mode_dropdown.setCurrentIndex(0)
-        elif current_mode == 'local': self.mode_dropdown.setCurrentIndex(2)
-        else: self.mode_dropdown.setCurrentIndex(1)
-            
-        self.stack.setCurrentIndex(self.mode_dropdown.currentIndex())
-        self.mode_dropdown.currentIndexChanged.connect(self.stack.setCurrentIndex)
-        
-        layout.addSpacing(20)
-        layout.addWidget(_make_section_header("Activation Mode Shortcut", self.theme))
-        
-        from PySide6.QtWidgets import QFormLayout
-        form = QFormLayout()
-        form.setLabelAlignment(Qt.AlignLeft)
-        form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
-        
-        self.cycle_mode_hotkey_input = self._create_hk_input(getattr(self.config, 'ui_cycle_mode_hotkey', 'ctrl+shift+v'))
-        form.addRow("Cycle Activation Mode Hotkey:", self.cycle_mode_hotkey_input)
-        layout.addLayout(form)
-
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
         layout.addStretch()
         
         # Monkey-patch text() so the existing save logic works without modification
@@ -1031,7 +743,6 @@ class SettingsDialog(QDialog):
         form_stt.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
         form_stt.setVerticalSpacing(15)
         
-<<<<<<< HEAD
         # Compute device hardcoded to CPU for Norvi Agency distribution
         self.stt_device_combo = NoScrollComboBox()
         self.stt_device_combo.addItems(["cpu"])
@@ -1062,20 +773,6 @@ class SettingsDialog(QDialog):
         
         form_stt.addRow("STT Models Directory:", stt_dir_box)
         
-=======
-        self.stt_device_combo = NoScrollComboBox()
-        self.stt_device_combo.addItems(["cuda", "cpu"])
-        self.stt_device_combo.setCurrentText(getattr(self.config, 'stt_device', 'cpu'))
-        self.stt_device_combo.setFixedWidth(180)
-        form_stt.addRow("Compute Device:", self.stt_device_combo)
-        
-        self.stt_model_combo = NoScrollComboBox()
-        self.stt_model_combo.addItems(["tiny.en", "tiny", "base.en", "base", "small.en", "small", "medium.en", "medium", "large"])
-        self.stt_model_combo.setCurrentText(getattr(self.config, 'stt_model_size', 'base.en'))
-        self.stt_model_combo.setFixedWidth(180)
-        form_stt.addRow("STT Model Size:", self.stt_model_combo)
-        
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
         stt_layout.addLayout(form_stt)
         
         stt_layout.addWidget(QLabel("STT Context Prompt (Helps with heavy accents/jargon):"))
@@ -1086,7 +783,6 @@ class SettingsDialog(QDialog):
         stt_layout.addWidget(self.stt_context_input)
         
         layout.addWidget(stt_frame)
-<<<<<<< HEAD
         layout.addSpacing(20)
         layout.addWidget(_make_section_header("Offline Model Downloads", self.theme))
         
@@ -1149,8 +845,6 @@ class SettingsDialog(QDialog):
         dl_layout.addLayout(form_dl)
         layout.addWidget(dl_frame)
 
-=======
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
 
         layout.addSpacing(20)
         layout.addWidget(_make_section_header("Interface Shortcuts", self.theme))
@@ -1179,7 +873,6 @@ class SettingsDialog(QDialog):
         self.maximize_hotkey_input = self._create_hk_input(getattr(self.config, 'ui_maximize_hotkey', 'F11'))
         form.addRow("Maximize Window Hotkey:", self.maximize_hotkey_input)
         
-<<<<<<< HEAD
         self.clear_session_hotkey_input = self._create_hk_input(getattr(self.config, 'ui_clear_session_hotkey', 'ctrl+shift+backspace'))
         form.addRow("Clear Session Hotkey:", self.clear_session_hotkey_input)
         
@@ -1206,10 +899,6 @@ class SettingsDialog(QDialog):
         self.stealth_toggle_btn = self._create_toggle_btn(stealth_val, "Stealth Mode: ON", "Stealth Mode: OFF")
         layout.addWidget(self.stealth_toggle_btn)
 
-=======
-        hk_layout.addLayout(form)
-        layout.addWidget(hk_frame)
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
 
         layout.addStretch()
         scroll.setWidget(inner)
@@ -1497,7 +1186,6 @@ class SettingsDialog(QDialog):
         l_vol.addWidget(self.tts_vol_label)
         
         form_tts_vol.addRow("Voice Volume (0-100):", w_vol)
-<<<<<<< HEAD
 
         self.tts_speed_combo = NoScrollComboBox()
         self.tts_speed_combo.addItems([
@@ -1526,8 +1214,6 @@ class SettingsDialog(QDialog):
         self.tts_output_device_combo.setMinimumWidth(250)
         form_tts_vol.addRow("Output Audio Device:", self.tts_output_device_combo)
 
-=======
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
         tts_layout.addLayout(form_tts_vol)
         
         from PySide6.QtWidgets import QFormLayout
@@ -1545,11 +1231,8 @@ class SettingsDialog(QDialog):
             "en-GB-RyanNeural (Male)",
             "en-AU-NatashaNeural (Female)",
             "en-AU-WilliamNeural (Male)",
-<<<<<<< HEAD
             "hi-IN-SwaraNeural (Female - Hinglish)",
             "hi-IN-MadhurNeural (Male - Hinglish)",
-=======
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
         ])
         current_voice = getattr(self.config, 'ui_voice', 'en-US-AriaNeural')
         idx = self.voice_combo.findText(current_voice, Qt.MatchContains)
@@ -1578,13 +1261,10 @@ class SettingsDialog(QDialog):
         
         def _toggle_tts(checked):
             self.tts_vol_slider.setEnabled(not checked)
-<<<<<<< HEAD
             if hasattr(self, 'tts_speed_combo'):
                 self.tts_speed_combo.setEnabled(not checked)
             if hasattr(self, 'tts_output_device_combo'):
                 self.tts_output_device_combo.setEnabled(not checked)
-=======
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
             self.voice_combo.setEnabled(not checked)
             self.btn_test_voice.setEnabled(not checked)
             if checked:
@@ -1962,11 +1642,7 @@ class SettingsDialog(QDialog):
         self.hint_hotkey_input = self._create_hk_input(getattr(self.config, 'ui_hint_hotkey', 'ctrl+shift+h'))
         form.addRow("Hint Mode Hotkey:", self.hint_hotkey_input)
         
-<<<<<<< HEAD
         self.snip_hotkey_input = self._create_hk_input(getattr(self.config, 'ui_snip_hotkey', 'ctrl+shift+p'))
-=======
-        self.snip_hotkey_input = self._create_hk_input(getattr(self.config, 'ui_snip_hotkey', 'ctrl+shift+s'))
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
         form.addRow("Snip Mode Hotkey:", self.snip_hotkey_input)
         
         for i in range(1, 4):
@@ -2050,46 +1726,6 @@ class SettingsDialog(QDialog):
 
     def save_settings(self):
         self.save_current_profile_fields()
-<<<<<<< HEAD
-=======
-        idx = self.mode_dropdown.currentIndex()
-        if idx == 0:
-            mode = "premium"
-            if not self.premium_key_input.text().strip() or not self.premium_model_input.text().strip():
-                QMessageBox.warning(self, "Validation Error", "Premium API Key and Model Name cannot be empty.")
-                return
-        elif idx == 2:
-            mode = "local"
-        else:
-            mode = "basic"
-            if not self.key_input.text().strip() or not self.active_model_combo.currentText().strip():
-                QMessageBox.warning(self, "Validation Error", "Basic Activation Key and Active Model cannot be empty.")
-                return
-
-        if not os.path.exists(self.env_path):
-            with open(self.env_path, "w") as f: pass
-
-        set_key(self.env_path, "ACTIVATION_MODE", mode)
-        
-        # Premium
-        set_key(self.env_path, "PREMIUM_API_KEY", self.premium_key_input.text().strip())
-        set_key(self.env_path, "PREMIUM_MODEL", self.premium_model_input.text().strip())
-        
-        # Basic
-        set_key(self.env_path, "OPENROUTER_API_KEY", self.key_input.text().strip())
-        set_key(self.env_path, "OPENROUTER_MODEL", self.active_model_combo.currentText().strip())
-        
-        for i, le in enumerate(self.model_inputs):
-            key = "OPENROUTER_MODEL" if i == 0 else f"OPENROUTER_MODEL_{i+1}"
-            set_key(self.env_path, key, le.text().strip())
-
-        # Local
-        set_key(self.env_path, "OLLAMA_MODEL", self.ollama_chat_combo.currentText().strip())
-        coding_text = self.ollama_coding_combo.currentText().strip()
-        set_key(self.env_path, "OLLAMA_CODING_MODEL", "" if "(none" in coding_text else coding_text)
-
-
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
         # Window
         set_key(self.env_path, "UI_OPACITY", str(self.opacity_slider.value()))
         set_key(self.env_path, "UI_THEME_MODE", self.theme_combo.currentText())
@@ -2211,21 +1847,6 @@ class SettingsDialog(QDialog):
         if color.isValid():
             self.you_heading_color = color.name()
             self.btn_you_color.setStyleSheet(self._heading_btn_style(self.you_heading_color))
-<<<<<<< HEAD
-=======
-
-    def pick_interviewer_color(self):
-        color = QColorDialog.getColor(QColor(self.interviewer_heading_color), self, "Select INTERVIEWER Heading Color")
-        if color.isValid():
-            self.interviewer_heading_color = color.name()
-            self.btn_interviewer_color.setStyleSheet(self._heading_btn_style(self.interviewer_heading_color))
-
-    def pick_voro_color(self):
-        color = QColorDialog.getColor(QColor(self.voro_heading_color), self, "Select VORO Heading Color")
-        if color.isValid():
-            self.voro_heading_color = color.name()
-            self.btn_voro_color.setStyleSheet(self._heading_btn_style(self.voro_heading_color))
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
 
     def pick_interviewer_color(self):
         color = QColorDialog.getColor(QColor(self.interviewer_heading_color), self, "Select INTERVIEWER Heading Color")
@@ -2276,52 +1897,6 @@ class SettingsDialog(QDialog):
         from PySide6.QtGui import QImage, QPixmap
         
         try:
-<<<<<<< HEAD
-=======
-            if getattr(self.config, 'ui_stealth_mode', True):
-                hwnd = self.winId()
-                ctypes.windll.user32.SetWindowDisplayAffinity(int(hwnd), 0x00000011)
-        except Exception:
-            pass
-
-    @Slot(bool)
-    def _on_vision_toggled(self, checked):
-        if hasattr(self, 'capture_mode_combo'):
-            self.capture_mode_combo.setEnabled(checked)
-        if hasattr(self, 'capture_target_combo'):
-            self.capture_target_combo.setEnabled(checked)
-        if hasattr(self, 'preview_label'):
-            if checked:
-                self._update_preview()
-            else:
-                self.preview_label.setText("Vision Disabled")
-                from PySide6.QtGui import QPixmap
-                self.preview_label.setPixmap(QPixmap())
-
-    @Slot()
-    def _apply_fetched_windows(self):
-        if hasattr(self, '_temp_window_titles'):
-            self.capture_target_combo.clear()
-            self.capture_target_combo.addItems(self._temp_window_titles)
-            self.capture_target_combo.setEnabled(True)
-
-    def _update_preview(self):
-        text = self.capture_target_combo.currentText()
-        if not text or text == "Fetching windows...":
-            self.preview_label.setText("No Preview")
-            return
-            
-        mode = "monitor" if "Monitor" in self.capture_mode_combo.currentText() else "window"
-        target = text
-        if mode == "monitor":
-            target = target.replace("Monitor ", "").split(" (")[0]
-            
-        import mss, ctypes
-        from ctypes import wintypes
-        from PySide6.QtGui import QImage, QPixmap
-        
-        try:
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
             with mss.mss() as sct:
                 if mode == "window":
                     hwnd = ctypes.windll.user32.FindWindowW(None, target)
@@ -2480,7 +2055,6 @@ class SettingsDialog(QDialog):
         from PySide6.QtWidgets import QMessageBox
         QMessageBox.warning(self, "Update Failed", f"Could not check for updates: {err}")
 
-<<<<<<< HEAD
 
     
     def _browse_stt_dir(self):
@@ -2545,8 +2119,6 @@ class SettingsDialog(QDialog):
         
         self.dl_status_lbl.setText("Cancelling...")
 
-=======
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80
     def _copy_logs(self):
         import os
         from PySide6.QtWidgets import QApplication
@@ -2562,7 +2134,6 @@ class SettingsDialog(QDialog):
         else:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "No Logs", "No log file found yet.")
-<<<<<<< HEAD
 
     def setup_norvi_page(self):
         page = QWidget()
@@ -2633,5 +2204,3 @@ class SettingsDialog(QDialog):
         scroll.setWidget(inner)
         layout.addWidget(scroll)
         self.pages.addWidget(page)
-=======
->>>>>>> 28fda911af64f70a4206de477a70afb6ecbb8a80

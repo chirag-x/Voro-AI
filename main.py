@@ -48,6 +48,18 @@ def main():
         # Create Qt App
         qt_app = QApplication(sys.argv)
         
+        # Start Ollama Manager
+        try:
+            from app.core.ollama_manager import manager as ollama_manager
+            ollama_manager.check_and_start()
+        except Exception as e:
+            logger.error(f"Failed to initialize Ollama Manager: {e}")
+            
+        # --- NORVI ANTI-PIRACY GATEKEEPER ---
+        from app.core.norvi_gatekeeper import require_license
+        if not require_license("voro"):
+            sys.exit(0)
+        # ------------------------------------
         # Force a global normal mouse pointer (stealth mode)
         # This prevents the mouse turning into an "I" text cursor over invisible input fields
         from PySide6.QtCore import Qt
@@ -242,6 +254,37 @@ def main():
             cycle_hotkey = getattr(voro_app.config, 'ui_cycle_mode_hotkey', 'ctrl+shift+v')
             keyboard.add_hotkey(cycle_hotkey, voro_app.cycle_activation_mode)
             logger.info(f"Cycle Mode hotkey registered: {cycle_hotkey}")
+            
+            # Quick Prompts Hotkeys
+            def make_quick_prompt_handler(prompt_text):
+                def handler():
+                    logger.info(f"Triggering Quick Prompt: {prompt_text}")
+                    voro_app.inject_user_input(prompt_text)
+                return handler
+
+            for i in range(1, 4):
+                hk = getattr(voro_app.config, f'ui_quick_prompt_{i}_hotkey', '')
+                txt = getattr(voro_app.config, f'ui_quick_prompt_{i}_text', '')
+                if hk and txt:
+                    keyboard.add_hotkey(hk, make_quick_prompt_handler(txt))
+                    logger.info(f"Quick Prompt {i} hotkey registered: {hk}")
+                    
+            stop_hk = getattr(voro_app.config, 'ui_stop_hotkey', 'ctrl+shift+c')
+            keyboard.add_hotkey(stop_hk, voro_app.stop_current_task)
+            logger.info(f"Stop Task hotkey registered: {stop_hk}")
+
+            clear_hk = getattr(voro_app.config, 'ui_clear_session_hotkey', 'ctrl+shift+backspace')
+            keyboard.add_hotkey(clear_hk, bridge.clear_session.emit)
+            logger.info(f"Clear Session hotkey registered: {clear_hk}")
+
+            tray_hk = getattr(voro_app.config, 'ui_toggle_tray_hotkey', 'ctrl+shift+y')
+            keyboard.add_hotkey(tray_hk, bridge.toggle_tray.emit)
+            logger.info(f"Toggle Tray hotkey registered: {tray_hk}")
+
+            stealth_hk = getattr(voro_app.config, 'ui_stealth_hotkey', 'ctrl+shift+g')
+            keyboard.add_hotkey(stealth_hk, bridge.toggle_stealth.emit)
+            logger.info(f"Stealth Mode hotkey registered: {stealth_hk}")
+            
             
         except Exception as e:
             logger.error(f"Failed to register global hotkeys: {e}")

@@ -668,7 +668,7 @@ class VoroApplication:
             base_url="http://localhost:11434/v1"
         )
         ai_coding_provider = self.ai_provider
-        ai_vision_provider = None # Text-only fallback for vision via OCR
+        ai_vision_provider = self.ai_provider # Gemma 4 supports native vision!
         
         from app.answer.engine import AnswerEngine
         self.answer_engine = AnswerEngine(

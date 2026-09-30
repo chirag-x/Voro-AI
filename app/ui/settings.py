@@ -138,6 +138,64 @@ class ModelDownloadThread(QThread):
         finally:
             hf_utils.tqdm = self._orig_tqdm
 
+class CollapsibleBox(QWidget):
+    def __init__(self, title="", parent=None):
+        super().__init__(parent)
+        self.toggle_button = QPushButton(title)
+        self.toggle_button.setCheckable(True)
+        self.toggle_button.setCursor(Qt.PointingHandCursor)
+        self.toggle_button.setStyleSheet("""
+            QPushButton {
+                text-align: left;
+                padding: 12px 15px;
+                background-color: #2D333B;
+                color: #FFFFFF;
+                border: 1px solid #444C56;
+                border-radius: 6px;
+                font-weight: bold;
+                font-size: 13px;
+            }
+            QPushButton:hover {
+                background-color: #373E47;
+            }
+            QPushButton:checked {
+                border-bottom-left-radius: 0px;
+                border-bottom-right-radius: 0px;
+                border-bottom: none;
+                background-color: #1E2329;
+            }
+        """)
+        
+        self.content_area = QWidget()
+        self.content_area.setStyleSheet("""
+            QWidget#content_area {
+                background-color: transparent;
+                border: 1px solid #444C56;
+                border-top: none;
+                border-bottom-left-radius: 6px;
+                border-bottom-right-radius: 6px;
+            }
+        """)
+        self.content_area.setObjectName("content_area")
+        self.content_layout = QVBoxLayout(self.content_area)
+        self.content_layout.setContentsMargins(15, 15, 15, 15)
+        self.content_layout.setSpacing(10)
+        self.content_area.setVisible(False)
+        
+        self.toggle_button.toggled.connect(self.content_area.setVisible)
+        
+        lay = QVBoxLayout(self)
+        lay.setSpacing(0)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.addWidget(self.toggle_button)
+        lay.addWidget(self.content_area)
+        
+    def addWidget(self, widget):
+        self.content_layout.addWidget(widget)
+        
+    def addLayout(self, layout):
+        self.content_layout.addLayout(layout)
+
 class SettingsDialog(QDialog):
     def __init__(self, context_manager: ContextManager, parent=None):
         super().__init__(parent)
@@ -1993,12 +2051,65 @@ class SettingsDialog(QDialog):
     def setup_help_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
+        layout.setContentsMargins(0, 0, 0, 0)
         
-        layout.addWidget(QLabel("<h2>Help & Support</h2>"))
-        layout.addWidget(QLabel("If you encounter issues or crashes with Voro, you can check the logs or copy them to report a bug."))
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+        
+        content_widget = QWidget()
+        content_layout = QVBoxLayout(content_widget)
+        content_layout.setContentsMargins(15, 15, 15, 15)
+        content_layout.setSpacing(15)
+        
+        content_layout.addWidget(QLabel("<h2>Help Center</h2>"))
+        
+        # --- Dropdown 1: Setup ---
+        box_setup = CollapsibleBox("🚀 How to Use the App (Setup Guide)")
+        lbl_setup = QLabel(
+            "<b>Step 1 — API Keys (The Brain)</b><br>"
+            "To give Voro a brain, go to the <b>Norvi</b> tab and enter an OpenRouter API key. If you want ultra-fast voice transcriptions, you can also enter a Groq API key in the <b>Audio</b> tab.<br><br>"
+            "<b>Step 2 — Speech-to-Text (STT)</b><br>"
+            "Voro needs to download a small offline voice model to understand you. Go to the <b>Audio</b> tab, click 'Browse' to set an STT Models Directory (e.g. inside your Voro folder), and then click 'Save & Restart'. It will download automatically.<br><br>"
+            "<b>Step 3 — Screen Vision (OCR)</b><br>"
+            "Make sure your 'Capture Mode' is set correctly in the <b>Vision</b> tab. For offline text-reading to work seamlessly, ensure Tesseract OCR is installed on your Windows machine."
+        )
+        lbl_setup.setWordWrap(True)
+        lbl_setup.setStyleSheet(f"color: {self.theme.get('base_text', '#E8E8E8')}; line-height: 1.4;")
+        box_setup.addWidget(lbl_setup)
+        content_layout.addWidget(box_setup)
+        
+        # --- Dropdown 2: Help ---
+        box_help = CollapsibleBox("📖 Voro Controls & Features")
+        lbl_help = QLabel(
+            "<b>Hotkeys:</b><br>"
+            "• <code>Ctrl+Space</code> : Wake Voro up and start talking.<br>"
+            "• <code>Ctrl+Shift+H</code> : Toggle Hint Mode (Answers appear subtly in the text box instead of being spoken).<br>"
+            "• <code>Ctrl+Shift+P</code> : Toggle Snip Mode (Select exactly what part of the screen Voro sees).<br>"
+            "• <code>Ctrl+Shift+G</code> : Toggle Stealth Mode (Completely hides Voro from Zoom/Teams screenshares and screenshots).<br><br>"
+            "<b>Tips:</b><br>"
+            "Use the <b>Occupancy</b> slider on Voro's main bar to adjust transparency. You can pull it down to make Voro nearly invisible during an interview!"
+        )
+        lbl_help.setWordWrap(True)
+        lbl_help.setStyleSheet(f"color: {self.theme.get('base_text', '#E8E8E8')}; line-height: 1.4;")
+        box_help.addWidget(lbl_help)
+        content_layout.addWidget(box_help)
+        
+        # --- Dropdown 3: Support ---
+        box_support = CollapsibleBox("🛠️ Support & Logs")
+        
+        support_lbl = QLabel(
+            "If you encounter issues or crashes with Voro, you can check your system logs or copy them to report a bug to our engineering team.<br><br>"
+            "<b>Contact Norvi Agency Support:</b><br>"
+            "Email: <a href='mailto:support@voro.ai' style='color:#0055A4; text-decoration:none;'>support@voro.ai</a><br>"
+            "Website: <a href='https://voro.ai' style='color:#0055A4; text-decoration:none;'>voro.ai</a><br>"
+        )
+        support_lbl.setWordWrap(True)
+        support_lbl.setOpenExternalLinks(True)
+        support_lbl.setStyleSheet(f"color: {self.theme.get('base_text', '#E8E8E8')}; line-height: 1.4;")
+        box_support.addWidget(support_lbl)
         
         btn_layout = QHBoxLayout()
-        
         self.btn_open_logs = QPushButton("Open Log Folder")
         self.btn_open_logs.setCursor(Qt.PointingHandCursor)
         self.btn_open_logs.clicked.connect(self._open_log_folder)
@@ -2008,18 +2119,14 @@ class SettingsDialog(QDialog):
         self.btn_copy_logs.setCursor(Qt.PointingHandCursor)
         self.btn_copy_logs.clicked.connect(self._copy_logs)
         btn_layout.addWidget(self.btn_copy_logs)
-        
         btn_layout.addStretch()
-        layout.addLayout(btn_layout)
         
-        layout.addWidget(QLabel("<h2>Contact & Support</h2>"))
-        contact_lbl = QLabel(
-            "Email: <a href='mailto:support@voro.ai' style='color:#0055A4; text-decoration:none;'>support@voro.ai</a><br>"
-            "Website: <a href='https://voro.ai' style='color:#0055A4; text-decoration:none;'>voro.ai</a>"
-        )
-        contact_lbl.setOpenExternalLinks(True)
-        layout.addWidget(contact_lbl)
-        layout.addStretch()
+        box_support.addLayout(btn_layout)
+        content_layout.addWidget(box_support)
+        
+        content_layout.addStretch()
+        scroll_area.setWidget(content_widget)
+        layout.addWidget(scroll_area)
         
         self.pages.addWidget(page)
         

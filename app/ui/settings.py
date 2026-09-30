@@ -750,6 +750,12 @@ class SettingsDialog(QDialog):
         self.stt_device_combo.setFixedWidth(180)
         # Hidden - not shown to user
         
+        self.groq_api_input = QLineEdit()
+        self.groq_api_input.setText(getattr(self.config, 'groq_api_key', ''))
+        self.groq_api_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.groq_api_input.setPlaceholderText("Enter Groq API Key for lightning-fast voice speed")
+        form_stt.addRow("Groq API Key (For Fast Speed):", self.groq_api_input)
+
         self.stt_model_combo = NoScrollComboBox()
         self.stt_model_combo.addItems(["small.en", "small", "medium.en", "medium"])
         saved_size = getattr(self.config, 'stt_model_size', 'small.en')
@@ -757,13 +763,7 @@ class SettingsDialog(QDialog):
         if saved_size == 'base': saved_size = 'small'
         self.stt_model_combo.setCurrentText(saved_size)
         self.stt_model_combo.setFixedWidth(180)
-        form_stt.addRow("STT Model Size:", self.stt_model_combo)
-
-        self.groq_api_input = QLineEdit()
-        self.groq_api_input.setText(getattr(self.config, 'groq_api_key', ''))
-        self.groq_api_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.groq_api_input.setPlaceholderText("Optional: Enter Groq API key for Turbo STT fallback...")
-        form_stt.addRow("Groq API Key (Optional):", self.groq_api_input)
+        form_stt.addRow("STT Model Size (Local Fallback):", self.stt_model_combo)
         
         self.stt_dir_input = QLineEdit()
         self.stt_dir_input.setText(getattr(self.config, 'stt_model_dir', ''))

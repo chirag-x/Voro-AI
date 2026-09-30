@@ -132,16 +132,52 @@ class OverlayWindow(QWidget):
         self.settings_btn.setFixedSize(85, 24)
         self.settings_btn.clicked.connect(self.open_settings)
         
-        # Real-time Opacity Slider (Occupancy control)
+        # Real-time Opacity (Occupancy) Container
+        opacity_container = QWidget()
+        opacity_container.setObjectName("OpacityContainer")
+        opacity_container.setStyleSheet(f"#OpacityContainer {{ border: 1px solid {self.theme.get('border', '#555')}; border-radius: 6px; padding: 2px 8px; background-color: transparent; }}")
+        
+        opacity_layout = QHBoxLayout(opacity_container)
+        opacity_layout.setContentsMargins(5, 2, 5, 2)
+        opacity_layout.setSpacing(8)
+        
+        opacity_label = QLabel("Occupancy:")
+        opacity_label.setStyleSheet(f"font-size: 11px; font-weight: bold; color: {self.theme.get('base_text', '#E8E8E8')}; border: none;")
+        
         self.opacity_slider = QSlider(Qt.Horizontal)
         self.opacity_slider.setRange(10, 100)
         self.opacity_slider.setValue(self.config.ui_opacity)
-        self.opacity_slider.setFixedWidth(80)
-        self.opacity_slider.setToolTip("Adjust Voro UI Opacity")
+        self.opacity_slider.setFixedWidth(130) # Made the horizontal bar bigger
+        self.opacity_slider.setToolTip("Adjust Voro Occupancy (Opacity)")
         self.opacity_slider.setCursor(Qt.PointingHandCursor)
         self.opacity_slider.valueChanged.connect(self._on_opacity_changed)
         
-        toolbar_layout.addWidget(self.opacity_slider)
+        # Style the slider to look clean inside the container
+        slider_color = "#4CAF50" if getattr(self, 'is_dark_mode', True) else "#388E3C"
+        self.opacity_slider.setStyleSheet(f"""
+            QSlider::groove:horizontal {{
+                border: 1px solid #777;
+                height: 4px;
+                background: #444;
+                margin: 2px 0;
+                border-radius: 2px;
+            }}
+            QSlider::handle:horizontal {{
+                background: {slider_color};
+                border: 1px solid {slider_color};
+                width: 14px;
+                margin: -5px 0;
+                border-radius: 7px;
+            }}
+        """)
+        
+        opacity_layout.addWidget(opacity_label)
+        opacity_layout.addWidget(self.opacity_slider)
+        
+        toolbar_layout.addWidget(opacity_container)
+        
+        # Add spacing to take it a bit further from the mic/speaker buttons
+        toolbar_layout.addSpacing(20)
         
         toolbar_layout.addWidget(self.ind_user_mic)
         toolbar_layout.addWidget(self.ind_sys_mic)

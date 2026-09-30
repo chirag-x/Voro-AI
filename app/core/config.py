@@ -33,7 +33,9 @@ class VoroConfig(BaseSettings):
     audio_channels: int = Field(default=1)
     audio_chunk_size: int = Field(default=1024)
 
-    ui_opacity: int = Field(default=100)
+    ui_opacity: int = Field(default=100) # Master Opacity
+    ui_bg_opacity: int = Field(default=100, env="UI_BG_OPACITY") # Background Base Opacity
+    ui_text_opacity: int = Field(default=100, env="UI_TEXT_OPACITY") # Text Base Opacity
     ui_you_heading_color: str = Field(default="#E53935")       # YOU heading
     ui_interviewer_heading_color: str = Field(default="#FF9900") # INTERVIEWER heading
     ui_voro_heading_color: str = Field(default="#0055A4")      # VORO heading

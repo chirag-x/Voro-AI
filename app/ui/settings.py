@@ -2067,12 +2067,11 @@ class SettingsDialog(QDialog):
         # --- Dropdown 1: Setup ---
         box_setup = CollapsibleBox("🚀 How to Use the App (Setup Guide)")
         lbl_setup = QLabel(
-            "<b>Step 1 — API Keys (The Brain)</b><br>"
-            "To give Voro a brain, go to the <b>Norvi</b> tab and enter an OpenRouter API key. If you want ultra-fast voice transcriptions, you can also enter a Groq API key in the <b>Audio</b> tab.<br><br>"
-            "<b>Step 2 — Speech-to-Text (STT)</b><br>"
-            "Voro needs to download a small offline voice model to understand you. Go to the <b>Audio</b> tab, click 'Browse' to set an STT Models Directory (e.g. inside your Voro folder), and then click 'Save & Restart'. It will download automatically.<br><br>"
-            "<b>Step 3 — Screen Vision (OCR)</b><br>"
-            "Make sure your 'Capture Mode' is set correctly in the <b>Vision</b> tab. For offline text-reading to work seamlessly, ensure Tesseract OCR is installed on your Windows machine."
+            "<b>Step 1 — Lightning-Fast Voice (Groq API)</b><br>"
+            "To get the fastest possible voice response times (under 200ms), we recommend setting up Groq. Go to <b>console.groq.com</b>, create a free API key, and paste it into the <b>Groq API Key</b> field in the <b>Audio</b> settings tab.<br><br>"
+            "<b>Step 2 — Offline Voice Fallback (STT)</b><br>"
+            "If your internet drops or Groq is unavailable, Voro will instantly fall back to a local offline voice model. To set this up, go to the <b>Audio</b> tab, click 'Browse' to set an STT Models Directory (e.g., inside your Voro folder), and then click 'Save & Restart'. It will download the fallback model automatically.<br><br>"
+            "<i>Note: Voro's Brain and Screen Vision systems are entirely fully-managed. You don't need to configure anything else to get started!</i>"
         )
         lbl_setup.setWordWrap(True)
         lbl_setup.setStyleSheet(f"color: {self.theme.get('base_text', '#E8E8E8')}; line-height: 1.4;")
@@ -2083,10 +2082,20 @@ class SettingsDialog(QDialog):
         box_help = CollapsibleBox("📖 Voro Controls & Features")
         lbl_help = QLabel(
             "<b>Hotkeys:</b><br>"
-            "• <code>Ctrl+Space</code> : Wake Voro up and start talking.<br>"
-            "• <code>Ctrl+Shift+H</code> : Toggle Hint Mode (Answers appear subtly in the text box instead of being spoken).<br>"
-            "• <code>Ctrl+Shift+P</code> : Toggle Snip Mode (Select exactly what part of the screen Voro sees).<br>"
-            "• <code>Ctrl+Shift+G</code> : Toggle Stealth Mode (Completely hides Voro from Zoom/Teams screenshares and screenshots).<br><br>"
+            "<i>(You can change all these hotkeys to whatever you like in the 'Interface' settings tab)</i><br><br>"
+            f"• <code>{self.config.ui_global_hotkey}</code> : Wake Voro up and start talking.<br>"
+            f"• <code>{self.config.ui_hint_hotkey}</code> : Toggle Hint Mode (Answers appear subtly in the text box instead of being spoken).<br>"
+            f"• <code>{self.config.ui_snip_hotkey}</code> : Toggle Snip Mode (Select exactly what part of the screen Voro sees).<br>"
+            f"• <code>{self.config.ui_stealth_hotkey}</code> : Toggle Stealth Mode (Completely hides Voro from Zoom/Teams screenshares and screenshots).<br>"
+            f"• <code>{self.config.ui_stop_hotkey}</code> : Stop Voro's current action or speech.<br>"
+            f"• <code>{self.config.ui_clear_session_hotkey}</code> : Clear Session (Make Voro forget the conversation).<br>"
+            f"• <code>{self.config.ui_mute_mic_hotkey}</code> : Mute User Mic.<br>"
+            f"• <code>{self.config.ui_mute_sys_hotkey}</code> : Mute System Audio capture.<br>"
+            f"• <code>{self.config.ui_tts_mute_hotkey}</code> : Mute Voro's Voice.<br>"
+            f"• <code>{self.config.ui_taskbar_hotkey}</code> : Toggle Taskbar visibility.<br>"
+            f"• <code>{self.config.ui_toggle_tray_hotkey}</code> : Toggle System Tray icon.<br>"
+            f"• <code>{self.config.ui_cycle_mode_hotkey}</code> : Cycle Voro Interface Mode.<br>"
+            f"• <code>{self.config.ui_quick_prompt_1_hotkey}</code> / <code>2</code> / <code>3</code> : Trigger Quick Prompts.<br><br>"
             "<b>Tips:</b><br>"
             "Use the <b>Occupancy</b> slider on Voro's main bar to adjust transparency. You can pull it down to make Voro nearly invisible during an interview!"
         )
@@ -2101,8 +2110,7 @@ class SettingsDialog(QDialog):
         support_lbl = QLabel(
             "If you encounter issues or crashes with Voro, you can check your system logs or copy them to report a bug to our engineering team.<br><br>"
             "<b>Contact Norvi Agency Support:</b><br>"
-            "Email: <a href='mailto:support@voro.ai' style='color:#0055A4; text-decoration:none;'>support@voro.ai</a><br>"
-            "Website: <a href='https://voro.ai' style='color:#0055A4; text-decoration:none;'>voro.ai</a><br>"
+            "Website: <a href='https://nor-vi.in/contact/' style='color:#0055A4; text-decoration:none;'>https://nor-vi.in/contact/</a><br>"
         )
         support_lbl.setWordWrap(True)
         support_lbl.setOpenExternalLinks(True)

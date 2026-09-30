@@ -141,6 +141,7 @@ class SpeechToText:
                 class DummyInfo:
                     language = "en"
                     language_probability = 1.0
+                    duration = len(audio_segment) / sample_rate
                 info = DummyInfo()
                 
                 logger.info(f"[stt] Groq transcription successful in {time.time() - start_time:.2f}s")

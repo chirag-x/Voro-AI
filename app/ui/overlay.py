@@ -76,14 +76,10 @@ class OverlayWindow(QWidget):
             )
         else:
             self.resize(self.config.ui_win_w, self.config.ui_win_h)
-        
-        # Enable true alpha-channel support for the frameless window
-        self.setAttribute(Qt.WA_TranslucentBackground)
-        
         # Apply Master Opacity
         self.setWindowOpacity(self.config.ui_opacity / 100.0)
         
-        # Apply theme with independent Background and Text base opacities
+        # Apply theme
         is_dark_mode = self.theme.get('bg', '#1E1E1E') == '#1E1E1E'
         btn_panel_bg  = "#2A2A2A" if is_dark_mode else "#E8E8E8"
         border_col    = self.theme.get('border', '#444')
@@ -91,27 +87,13 @@ class OverlayWindow(QWidget):
         bg_col_main   = self.theme['bg']
         accent        = "#0055A4"
         
-        # Helper to convert hex to rgba
-        def hex_to_rgba(hex_color, alpha_pct):
-            hex_color = hex_color.lstrip('#')
-            if len(hex_color) == 6:
-                r, g, b = tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
-                return f"rgba({r}, {g}, {b}, {alpha_pct / 100.0})"
-            return hex_color
-
-        base_bg_opacity = getattr(self.config, 'ui_bg_opacity', 100)
-        base_text_opacity = getattr(self.config, 'ui_text_opacity', 100)
-
-        bg_rgba = hex_to_rgba(bg_col_main, base_bg_opacity)
-        text_rgba = hex_to_rgba(text_col, base_text_opacity)
-        
         self.setStyleSheet(
-            f"QWidget {{ font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: {text_rgba}; }}"
-            f"OverlayWindow {{ background-color: {bg_rgba}; border-radius: 12px; border: 1px solid {border_col}; }}"
-            f"QLabel {{ color: {text_rgba}; }}"
-            f"QPushButton#settings_btn {{ background-color: {btn_panel_bg}; color: {text_rgba}; border: 1px solid {border_col}; border-radius: 6px; padding: 4px 10px; font-weight: bold; }}"
+            f"QWidget {{ font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: {text_col}; }}"
+            f"OverlayWindow {{ background-color: {bg_col_main}; border-radius: 12px; border: 1px solid {border_col}; }}"
+            f"QLabel {{ color: {text_col}; }}"
+            f"QPushButton#settings_btn {{ background-color: {btn_panel_bg}; color: {text_col}; border: 1px solid {border_col}; border-radius: 6px; padding: 4px 10px; font-weight: bold; }}"
             f"QPushButton#settings_btn:hover {{ border: 1px solid {accent}; }}"
-            f"QTextEdit {{ background-color: transparent; border: none; color: {text_rgba}; }}"
+            f"QTextEdit {{ background-color: transparent; border: none; color: {text_col}; }}"
         )
         
         self.layout = QVBoxLayout(self)

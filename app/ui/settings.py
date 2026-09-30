@@ -692,33 +692,19 @@ class SettingsDialog(QDialog):
         self.theme_combo.setFixedWidth(180)
         form_sliders.addRow("Theme:", self.theme_combo)
         
-        # Background Opacity
-        self.bg_opacity_slider = NoScrollSlider(Qt.Horizontal)
-        self.bg_opacity_slider.setRange(10, 100)
-        self.bg_opacity_slider.setValue(getattr(self.config, 'ui_bg_opacity', 100))
-        self.bg_opacity_val = QLabel(str(self.bg_opacity_slider.value()))
-        self.bg_opacity_slider.valueChanged.connect(lambda v: self.bg_opacity_val.setText(str(v)))
-        self.bg_opacity_slider.setFixedWidth(180)
+        # Window Opacity
+        self.opacity_slider = NoScrollSlider(Qt.Horizontal)
+        self.opacity_slider.setRange(10, 100)
+        self.opacity_slider.setValue(self.config.ui_opacity)
+        self.opacity_val_label = QLabel(str(self.opacity_slider.value()))
+        self.opacity_slider.valueChanged.connect(lambda v: self.opacity_val_label.setText(str(v)))
+        self.opacity_slider.setFixedWidth(180)
         w1 = QWidget()
         l1 = QHBoxLayout(w1)
         l1.setContentsMargins(0, 0, 0, 0)
-        l1.addWidget(self.bg_opacity_slider)
-        l1.addWidget(self.bg_opacity_val)
-        form_sliders.addRow("Base Background Opacity (%):", w1)
-        
-        # Text/UI Opacity
-        self.text_opacity_slider = NoScrollSlider(Qt.Horizontal)
-        self.text_opacity_slider.setRange(10, 100)
-        self.text_opacity_slider.setValue(getattr(self.config, 'ui_text_opacity', 100))
-        self.text_opacity_val = QLabel(str(self.text_opacity_slider.value()))
-        self.text_opacity_slider.valueChanged.connect(lambda v: self.text_opacity_val.setText(str(v)))
-        self.text_opacity_slider.setFixedWidth(180)
-        w2 = QWidget()
-        l2 = QHBoxLayout(w2)
-        l2.setContentsMargins(0, 0, 0, 0)
-        l2.addWidget(self.text_opacity_slider)
-        l2.addWidget(self.text_opacity_val)
-        form_sliders.addRow("Base Text & UI Opacity (%):", w2)
+        l1.addWidget(self.opacity_slider)
+        l1.addWidget(self.opacity_val_label)
+        form_sliders.addRow("Window Opacity (%):", w1)
         
         
         # Font Size
@@ -1805,8 +1791,7 @@ class SettingsDialog(QDialog):
     def save_settings(self):
         self.save_current_profile_fields()
         # Window
-        set_key(self.env_path, "UI_BG_OPACITY", str(self.bg_opacity_slider.value()))
-        set_key(self.env_path, "UI_TEXT_OPACITY", str(self.text_opacity_slider.value()))
+        set_key(self.env_path, "UI_OPACITY", str(self.opacity_slider.value()))
         set_key(self.env_path, "UI_THEME_MODE", self.theme_combo.currentText())
         set_key(self.env_path, "UI_FONT_SIZE", str(self.font_slider.value()))
         

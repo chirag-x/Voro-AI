@@ -143,7 +143,8 @@ class VoroApplication:
             self.stt = SpeechToText(
                 model_size=sz,
                 device=getattr(self.config, 'stt_device', 'cpu'),
-                model_dir=getattr(self.config, 'stt_model_dir', '')
+                model_dir=getattr(self.config, 'stt_model_dir', ''),
+                groq_api_key=getattr(self.config, 'groq_api_key', '')
             )
             self.stt.initialize()
             logger.info("STT ready.")

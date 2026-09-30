@@ -13,11 +13,12 @@ class SpeechToText:
     Provides a clean abstraction so the rest of the application
     does not depend directly on whisper implementation details.
     """
-    def __init__(self, model_size: str = "tiny.en", device: str = "cpu", compute_type: str = "int8", model_dir: str = ""):
+    def __init__(self, model_size: str = "tiny.en", device: str = "cpu", compute_type: str = "int8", model_dir: str = "", groq_api_key: str = ""):
         self.model_size = model_size
         self.device = device
         self.compute_type = compute_type
         self.model_dir = model_dir
+        self.groq_api_key = groq_api_key
         self.model = None
 
     def initialize(self):
@@ -89,14 +90,75 @@ class SpeechToText:
             out_text = " ".join([seg.text for seg in segs]).strip()
             return out_text, inf
 
+        text = ""
+        info = None
+        local_run = True
+
+        if self.groq_api_key and self.groq_api_key.strip():
+            try:
+                import io
+                import wave
+                import httpx
+                
+                audio_data = np.clip(audio_segment, -1.0, 1.0)
+                audio_data = (audio_data * 32767.0).astype(np.int16)
+                
+                wav_io = io.BytesIO()
+                with wave.open(wav_io, 'wb') as wf:
+                    wf.setnchannels(1)
+                    wf.setsampwidth(2)
+                    wf.setframerate(sample_rate)
+                    wf.writeframes(audio_data.tobytes())
+                wav_io.seek(0)
+                
+                logger.info("[stt] Attempting turbo transcription via Groq API...")
+                
+                headers = {"Authorization": f"Bearer {self.groq_api_key.strip()}"}
+                files = {"file": ("audio.wav", wav_io.read(), "audio/wav")}
+                data = {
+                    "model": "whisper-large-v3-turbo",
+                    "temperature": "0.0"
+                }
+                
+                if is_en_only:
+                    data["language"] = "en"
+                
+                if kwargs.get("initial_prompt"):
+                    data["prompt"] = kwargs.get("initial_prompt")
+                
+                with httpx.Client(timeout=4.0) as client:
+                    resp = client.post(
+                        "https://api.groq.com/openai/v1/audio/transcriptions",
+                        headers=headers,
+                        data=data,
+                        files=files
+                    )
+                    resp.raise_for_status()
+                    
+                result_json = resp.json()
+                text = result_json.get("text", "").strip()
+                
+                class DummyInfo:
+                    language = "en"
+                    language_probability = 1.0
+                info = DummyInfo()
+                
+                logger.info(f"[stt] Groq transcription successful in {time.time() - start_time:.2f}s")
+                local_run = False
+                
+            except Exception as e:
+                logger.warning(f"[stt] Groq API failed ({type(e).__name__}: {e}). Falling back to local faster-whisper...")
+                local_run = True
+
         try:
-            target_lang = "en" if is_en_only else None
-            text, info = run_transcribe(audio_segment, target_lang)
-            
-            # If the model hallucinates a random language (e.g. Portuguese) instead of English/Hindi
-            if not is_en_only and info.language not in ["en", "hi"]:
-                logger.info(f"[stt] Whisper guessed random language '{info.language}'. Forcing Hindi transcription...")
-                text, info = run_transcribe(audio_segment, "hi")
+            if local_run:
+                target_lang = "en" if is_en_only else None
+                text, info = run_transcribe(audio_segment, target_lang)
+                
+                # If the model hallucinates a random language (e.g. Portuguese) instead of English/Hindi
+                if not is_en_only and info.language not in ["en", "hi"]:
+                    logger.info(f"[stt] Whisper guessed random language '{info.language}'. Forcing Hindi transcription...")
+                    text, info = run_transcribe(audio_segment, "hi")
 
         except RuntimeError as e:
             err_str = str(e)

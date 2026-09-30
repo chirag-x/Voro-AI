@@ -96,6 +96,7 @@ class VoroConfig(BaseSettings):
     stt_model_size: str = Field(default="tiny.en", env="STT_MODEL_SIZE")
     stt_device: str = Field(default="cpu", env="STT_DEVICE")
     stt_model_dir: str = Field(default="", env="STT_MODEL_DIR")
+    groq_api_key: str = Field(default="", env="GROQ_API_KEY")
     stt_context_prompt: str = Field(default="This is a highly technical software engineering interview covering programming, system design, and coding.", env="STT_CONTEXT_PROMPT")
     enable_web_search: bool = Field(default=False, env="ENABLE_WEB_SEARCH")
     enable_auto_monitor: bool = Field(default=False, env="ENABLE_AUTO_MONITOR")

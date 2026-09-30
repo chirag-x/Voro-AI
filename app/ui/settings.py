@@ -758,6 +758,12 @@ class SettingsDialog(QDialog):
         self.stt_model_combo.setCurrentText(saved_size)
         self.stt_model_combo.setFixedWidth(180)
         form_stt.addRow("STT Model Size:", self.stt_model_combo)
+
+        self.groq_api_input = QLineEdit()
+        self.groq_api_input.setText(getattr(self.config, 'groq_api_key', ''))
+        self.groq_api_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.groq_api_input.setPlaceholderText("Optional: Enter Groq API key for Turbo STT fallback...")
+        form_stt.addRow("Groq API Key (Optional):", self.groq_api_input)
         
         self.stt_dir_input = QLineEdit()
         self.stt_dir_input.setText(getattr(self.config, 'stt_model_dir', ''))
@@ -1818,6 +1824,8 @@ class SettingsDialog(QDialog):
             set_key(self.env_path, "STT_MODEL_DIR", val)
         if hasattr(self, 'stt_context_input'):
             set_key(self.env_path, "STT_CONTEXT_PROMPT", self.stt_context_input.toPlainText().strip())
+        if hasattr(self, 'groq_api_input'):
+            set_key(self.env_path, "GROQ_API_KEY", self.groq_api_input.text().strip())
 
         if hasattr(self, 'chk_tts_muted'):
             set_key(self.env_path, "UI_TTS_MUTED", str(self.btn_tts_muted.isChecked()))

@@ -1,7 +1,7 @@
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtCore import QUrl
 import os
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLabel, QPushButton, QSystemTrayIcon, QMenu, QApplication
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLabel, QPushButton, QSystemTrayIcon, QMenu, QApplication, QSlider
 from PySide6.QtCore import Qt, QObject, Signal, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtGui import QKeySequence, QShortcut
@@ -132,6 +132,17 @@ class OverlayWindow(QWidget):
         self.settings_btn.setFixedSize(85, 24)
         self.settings_btn.clicked.connect(self.open_settings)
         
+        # Real-time Opacity Slider (Occupancy control)
+        self.opacity_slider = QSlider(Qt.Horizontal)
+        self.opacity_slider.setRange(10, 100)
+        self.opacity_slider.setValue(self.config.ui_opacity)
+        self.opacity_slider.setFixedWidth(80)
+        self.opacity_slider.setToolTip("Adjust Voro UI Opacity")
+        self.opacity_slider.setCursor(Qt.PointingHandCursor)
+        self.opacity_slider.valueChanged.connect(self._on_opacity_changed)
+        
+        toolbar_layout.addWidget(self.opacity_slider)
+        
         toolbar_layout.addWidget(self.ind_user_mic)
         toolbar_layout.addWidget(self.ind_sys_mic)
         toolbar_layout.addWidget(self.ind_voice)
@@ -252,6 +263,16 @@ class OverlayWindow(QWidget):
         self.show()
         self.pin_btn.setText("ðŸ“Œ Unpin" if self._always_on_top else "ðŸ“Œ Pin")
         set_key(self._env_path, "UI_ALWAYS_ON_TOP", str(self._always_on_top))
+
+    def _on_opacity_changed(self, value: int):
+        # Update live opacity
+        self.setWindowOpacity(value / 100.0)
+        # Save to config object so Settings window reflects it if opened
+        self.config.ui_opacity = value
+        # Save securely to .env file for persistence
+        from dotenv import set_key
+        env_path = os.path.join(os.getcwd(), ".env")
+        set_key(env_path, "UI_OPACITY", str(value))
 
     def set_tray(self, tray):
         """Called from main.py after the tray icon is created."""

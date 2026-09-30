@@ -749,7 +749,7 @@ class OverlayWindow(QWidget):
             self._show_tray = True
             if hasattr(self, 'tray_icon') and self.tray_icon:
                 self.tray_icon.show()
-            self._show_in_taskbar = getattr(self.config, 'ui_show_in_taskbar', False)
+            self._show_in_taskbar = True
             self._apply_taskbar_state()
             if not self.isVisible():
                 self.show()

@@ -755,15 +755,6 @@ class SettingsDialog(QDialog):
         
         
         # Checkboxes (Toggles)
-        self.chk_taskbar = self._create_toggle_btn(self.config.ui_show_in_taskbar, "Taskbar Visible", "Taskbar Hidden")
-        layout.addWidget(self.chk_taskbar)
-        
-        self.chk_tray = self._create_toggle_btn(self.config.ui_show_tray, "System Tray Visible", "System Tray Hidden")
-        layout.addWidget(self.chk_tray)
-        
-        self.chk_pin = self._create_toggle_btn(self.config.ui_always_on_top, "Always on Top Enabled", "Always on Top Disabled")
-        layout.addWidget(self.chk_pin)
-        
         self.chk_pos = self._create_toggle_btn(self.config.ui_remember_position, "Remember Position Enabled", "Remember Position Disabled")
         layout.addWidget(self.chk_pos)
         
@@ -1822,9 +1813,6 @@ class SettingsDialog(QDialog):
         if hasattr(self, 'chk_auto_update'):
             set_key(self.env_path, "UI_AUTO_UPDATE", str(self.chk_auto_update.isChecked()))
         set_key(self.env_path, "CONVERSATION_HISTORY_DEPTH", str(self.hist_slider.value()))
-        set_key(self.env_path, "UI_SHOW_IN_TASKBAR", str(self.chk_taskbar.isChecked()))
-        set_key(self.env_path, "UI_SHOW_TRAY", str(self.chk_tray.isChecked()))
-        set_key(self.env_path, "UI_ALWAYS_ON_TOP", str(self.chk_pin.isChecked()))
         set_key(self.env_path, "UI_REMEMBER_POSITION", str(self.chk_pos.isChecked()))
         set_key(self.env_path, "MUTE_USER_MIC", str(self.btn_mute_mic.isChecked()))
         set_key(self.env_path, "MUTE_SYSTEM_AUDIO", str(self.btn_mute_sys.isChecked()))

@@ -47,7 +47,7 @@ class VoroConfig(BaseSettings):
     ui_settings_win_y: int = Field(default=-1)
     ui_settings_win_w: int = Field(default=900)
     ui_settings_win_h: int = Field(default=650)
-    ui_show_in_taskbar: bool = Field(default=False)
+    ui_show_in_taskbar: bool = Field(default=True)
     ui_show_tray: bool = Field(default=True)
     ui_always_on_top: bool = Field(default=False, env="UI_ALWAYS_ON_TOP")
     ui_theme_mode: str = Field(default="system")

@@ -21,8 +21,12 @@ class SpeechToText:
         self.groq_api_key = groq_api_key
         self.model = None
 
-    def initialize(self):
+    def initialize(self, force=False):
         """Initialize and load the model."""
+        if self.groq_api_key and self.groq_api_key.strip() and not force:
+            logger.info("Groq API key found. Skipping local model load (will lazy-load if fallback is needed).")
+            return
+            
         logger.info(f"Loading STT model '{self.model_size}' on {self.device}...")
         
         # Fix: Require stt_model_dir to prevent auto-downloading to C drive
@@ -69,9 +73,6 @@ class SpeechToText:
         Transcribe an audio segment.
         The audio_segment is expected to be a 1D numpy array of float32.
         """
-        if self.model is None:
-            raise RuntimeError("STT engine not initialized.")
-            
         start_time = time.time()
         
         # We always check if we're using English specific model or multilingual
@@ -153,6 +154,10 @@ class SpeechToText:
 
         try:
             if local_run:
+                if self.model is None:
+                    logger.info("Initializing local STT fallback model (lazy-load)...")
+                    self.initialize(force=True)
+                    
                 target_lang = "en" if is_en_only else None
                 text, info = run_transcribe(audio_segment, target_lang)
                 

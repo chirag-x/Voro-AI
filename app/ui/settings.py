@@ -615,6 +615,13 @@ class SettingsDialog(QDialog):
         for le, lbl in zip(self.model_inputs, self.model_status_labels):
             if not le.text().strip() and lbl.text() == "⏳":
                 lbl.setText("")
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Apply stealth mode to this dialog if the parent window has it enabled
+        if self.parent() and hasattr(self.parent(), '_stealth_active') and self.parent()._stealth_active:
+            if hasattr(self.parent(), '_apply_privacy_flag'):
+                self.parent()._apply_privacy_flag(stealth=True, target_hwnd=int(self.winId()))
                 
     def setup_window_page(self):
         page = QWidget()

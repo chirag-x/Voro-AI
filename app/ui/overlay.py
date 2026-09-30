@@ -393,12 +393,12 @@ class OverlayWindow(QWidget):
         if was_visible:
             self.show()
 
-    def _apply_privacy_flag(self, stealth: bool = True):
+    def _apply_privacy_flag(self, stealth: bool = True, target_hwnd=None):
         import sys
         if sys.platform == "win32":
             try:
                 import ctypes
-                hwnd = int(self.winId())
+                hwnd = target_hwnd if target_hwnd else int(self.winId())
                 # 0x11 = WDA_EXCLUDEFROMCAPTURE (invisible to screenshare/screenshot)
                 # 0x00 = WDA_NONE (fully visible normal app)
                 affinity = 0x11 if stealth else 0x00
@@ -723,18 +723,29 @@ class OverlayWindow(QWidget):
     def toggle_stealth_mode(self):
         '''Toggle Stealth Mode: ON = ghost to screenshare/screenshot. OFF = fully normal visible app.'''
         self._stealth_active = not getattr(self, '_stealth_active', False)
+        
+        from PySide6.QtWidgets import QApplication
+        
         if self._stealth_active:
             # Stealth ON: Invisible to screenshare/screenshot but user can still see Voro
-            # Also hide tray + taskbar for full invisibility
             self._apply_privacy_flag(stealth=True)
+            for widget in QApplication.topLevelWidgets():
+                if widget != self:
+                    self._apply_privacy_flag(stealth=True, target_hwnd=int(widget.winId()))
+                    
+            # Also hide tray + taskbar for full invisibility
             self._show_tray = False
             if hasattr(self, 'tray_icon') and self.tray_icon:
                 self.tray_icon.hide()
             self._show_in_taskbar = False
             self._apply_taskbar_state()
         else:
-            # Stealth OFF: Fully normal visible app - appears in screenshare, screenshots, taskbar, tray
+            # Stealth OFF: Fully normal visible app
             self._apply_privacy_flag(stealth=False)
+            for widget in QApplication.topLevelWidgets():
+                if widget != self:
+                    self._apply_privacy_flag(stealth=False, target_hwnd=int(widget.winId()))
+                    
             self._show_tray = True
             if hasattr(self, 'tray_icon') and self.tray_icon:
                 self.tray_icon.show()

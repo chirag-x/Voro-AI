@@ -57,8 +57,7 @@ class OverlayWindow(QWidget):
         
         # --- Feature 2: Always-on-top state ---
         self._always_on_top = self.config.ui_always_on_top
-        # Must be frameless for WA_TranslucentBackground to work on Windows
-        flags = Qt.Window | Qt.FramelessWindowHint
+        flags = Qt.Window
         if self._always_on_top:
             flags |= Qt.WindowStaysOnTopHint
         self.setWindowFlags(flags)
@@ -211,20 +210,12 @@ class OverlayWindow(QWidget):
         
         toolbar_layout.addWidget(self.settings_btn)
         
-        # Add Pin and Close buttons for the frameless window
-        self.pin_btn = QPushButton("📌 Pin" if not self._always_on_top else "📌 Unpin")
+        self.pin_btn = QPushButton("\U0001F4CC Pin" if not self._always_on_top else "\U0001F4CC Unpin")
         self.pin_btn.setFixedSize(65, 24)
         self.pin_btn.setCursor(Qt.PointingHandCursor)
         self.pin_btn.setStyleSheet(f"QPushButton {{ background-color: transparent; border: 1px solid {self.theme.get('border', '#555')}; border-radius: 6px; font-weight: bold; color: {self.theme['base_text']}; }} QPushButton:hover {{ background-color: #333; }}")
         self.pin_btn.clicked.connect(self.toggle_always_on_top)
         toolbar_layout.addWidget(self.pin_btn)
-        
-        self.close_btn = QPushButton("✕")
-        self.close_btn.setFixedSize(30, 24)
-        self.close_btn.setCursor(Qt.PointingHandCursor)
-        self.close_btn.setStyleSheet("QPushButton { background-color: #E53935; color: white; border-radius: 6px; font-weight: bold; border: none; } QPushButton:hover { background-color: #C62828; }")
-        self.close_btn.clicked.connect(self.close)
-        toolbar_layout.addWidget(self.close_btn)
         
         self._update_indicators()
         
@@ -330,7 +321,7 @@ class OverlayWindow(QWidget):
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
         self.show()
-        self.pin_btn.setText("ðŸ“Œ Unpin" if self._always_on_top else "ðŸ“Œ Pin")
+        self.pin_btn.setText("\U0001F4CC Unpin" if self._always_on_top else "\U0001F4CC Pin")
         set_key(self._env_path, "UI_ALWAYS_ON_TOP", str(self._always_on_top))
 
     def _on_opacity_changed(self, value: int):

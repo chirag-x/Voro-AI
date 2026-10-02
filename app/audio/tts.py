@@ -15,7 +15,7 @@ class TTSWorker(threading.Thread):
         self.running = True
         self.voice = getattr(self.config, 'ui_voice', 'en-US-AriaNeural')
         
-        self.temp_dir = os.path.join(os.getcwd(), "temp_tts")
+        self.temp_dir = os.path.join(os.environ.get('TEMP', os.getcwd()), "Voro_TTS")
         os.makedirs(self.temp_dir, exist_ok=True)
         self._clear_temp()
 

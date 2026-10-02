@@ -31,7 +31,7 @@ class SpeechToText:
         
         # Default to a local directory if none is set
         if not self.model_dir or not self.model_dir.strip():
-            self.model_dir = os.path.join(os.getcwd(), "STT_models")
+            self.model_dir = os.path.join(os.environ.get('APPDATA', os.getcwd()), "Voro", "STT_models")
             
         os.makedirs(self.model_dir, exist_ok=True)
             

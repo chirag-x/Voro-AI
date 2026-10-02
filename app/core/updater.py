@@ -25,13 +25,25 @@ class Updater(QObject):
     def check_for_updates(self):
         def _check():
             try:
-                r = httpx.get("https://api.github.com/repos/chirag-x/Voro--AI/releases/latest", timeout=5.0)
+                r = httpx.get("https://api.github.com/repos/chirag-x/Norvi-Agents/releases", timeout=5.0)
                 if r.status_code == 200:
-                    data = r.json()
-                    latest = data.get("tag_name", "").lstrip("v")
-                    assets = data.get("assets", [])
-                    url = assets[0]["browser_download_url"] if assets else ""
-                    notes = data.get("body", "")
+                    releases = r.json()
+                    
+                    latest = None
+                    url = ""
+                    notes = ""
+                    
+                    # Search through releases to find the latest one that contains Voro_Setup.exe
+                    for release in releases:
+                        assets = release.get("assets", [])
+                        voro_asset = next((a for a in assets if "Voro_Setup.exe" in a.get("name", "")), None)
+                        
+                        if voro_asset:
+                            # We found the latest Voro release!
+                            latest = release.get("tag_name", "").replace("voro-", "").lstrip("v")
+                            url = voro_asset["browser_download_url"]
+                            notes = release.get("body", "")
+                            break
                     
                     if latest and self._is_newer(latest, APP_VERSION):
                         self.update_available.emit(latest, notes, url)

@@ -118,10 +118,22 @@ class VoroConfig(BaseSettings):
         "extra": "ignore"
     }
 
+def get_env_path() -> str:
+    import os
+    appdata = os.getenv("APPDATA", os.path.expanduser("~"))
+    env_dir = os.path.join(appdata, "Norvi", "Voro")
+    os.makedirs(env_dir, exist_ok=True)
+    return os.path.join(env_dir, ".env")
+
 def load_config() -> VoroConfig:
     try:
         from dotenv import load_dotenv
-        load_dotenv(override=True)
+        env_path = get_env_path()
+        # Create empty .env if it doesn't exist
+        if not os.path.exists(env_path):
+            with open(env_path, 'w', encoding='utf-8') as f:
+                pass
+        load_dotenv(env_path, override=True)
         return VoroConfig()
     except Exception as e:
         raise ConfigError(f"Failed to load configuration: {e}")

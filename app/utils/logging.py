@@ -37,7 +37,8 @@ def setup_logging():
         
         # File handler
         try:
-            log_dir = os.path.join(os.getcwd(), "logs")
+            appdata = os.getenv("APPDATA", os.path.expanduser("~"))
+            log_dir = os.path.join(appdata, "Norvi", "Voro", "logs")
             os.makedirs(log_dir, exist_ok=True)
             log_file = os.path.join(log_dir, "voro.log")
             

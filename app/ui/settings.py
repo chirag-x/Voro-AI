@@ -212,7 +212,8 @@ class SettingsDialog(QDialog):
         else:
             self.resize(900, 650)
         self.context_manager = context_manager
-        self.env_path = os.path.join(os.getcwd(), ".env")
+        from app.core.config import get_env_path
+        self.env_path = get_env_path()
         
         # Auto-detect Windows theme
         from app.ui.theme import get_theme_colors
@@ -2322,3 +2323,4 @@ class SettingsDialog(QDialog):
         scroll.setWidget(inner)
         layout.addWidget(scroll)
         self.pages.addWidget(page)
+

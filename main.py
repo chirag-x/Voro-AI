@@ -1,13 +1,26 @@
+import sys
 import os
+
+# Universal fix for --noconsole crashing on print() or sys.stderr.write()
+class DummyIO:
+    def write(self, *args, **kwargs): pass
+    def flush(self, *args, **kwargs): pass
+    def isatty(self): return False
+
+if sys.stdout is None:
+    sys.stdout = DummyIO()
+if sys.stderr is None:
+    sys.stderr = DummyIO()
+
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 os.environ["OMP_NUM_THREADS"] = "4"
 os.environ["MKL_NUM_THREADS"] = "4"
-import sys
 import signal
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QIcon
 from app.core.norvi_gatekeeper import require_license
 from app.core.application import VoroApplication
+from app.core.config import get_env_path
 from app.ui.overlay import OverlayWindow, UIBridge
 from app.utils.logging import logger
 import warnings
@@ -205,7 +218,7 @@ def main():
                 from dotenv import set_key
                 val = str(voro_app.config.mute_user_mic)
                 os.environ["MUTE_USER_MIC"] = val
-                set_key(os.path.join(os.getcwd(), ".env"), "MUTE_USER_MIC", val)
+                set_key(get_env_path(), "MUTE_USER_MIC", val)
                 bridge.config_updated.emit()
                 
             def toggle_mute_sys(*args):
@@ -216,7 +229,7 @@ def main():
                 from dotenv import set_key
                 val = str(voro_app.config.mute_system_audio)
                 os.environ["MUTE_SYSTEM_AUDIO"] = val
-                set_key(os.path.join(os.getcwd(), ".env"), "MUTE_SYSTEM_AUDIO", val)
+                set_key(get_env_path(), "MUTE_SYSTEM_AUDIO", val)
                 bridge.config_updated.emit()
                 
             mic_hotkey = getattr(voro_app.config, 'ui_mute_mic_hotkey', 'ctrl+shift+m')
@@ -236,7 +249,7 @@ def main():
                 from dotenv import set_key
                 val = str(voro_app.config.ui_tts_muted)
                 os.environ["UI_TTS_MUTED"] = val
-                set_key(os.path.join(os.getcwd(), ".env"), "UI_TTS_MUTED", val)
+                set_key(get_env_path(), "UI_TTS_MUTED", val)
                 bridge.config_updated.emit()
                 if voro_app.config.ui_tts_muted:
                     bridge.tts_stop.emit()
@@ -307,3 +320,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

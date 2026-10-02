@@ -186,7 +186,8 @@ class VoroApplication:
         # Also persist to .env
         from dotenv import set_key
         import os
-        env_path = os.path.join(os.getcwd(), ".env")
+        from app.core.config import get_env_path
+        env_path = get_env_path()
         set_key(env_path, "OPENROUTER_MODEL", new_model)
 
     def reload_context(self):
@@ -652,7 +653,8 @@ class VoroApplication:
         
         import os
         from dotenv import set_key
-        env_path = os.path.join(os.getcwd(), ".env")
+        from app.core.config import get_env_path
+        env_path = get_env_path()
         set_key(env_path, "ACTIVATION_MODE", next_mode)
         
         self.reload_ai_provider()
@@ -780,3 +782,4 @@ class VoroApplication:
             ai_coding_provider=ai_coding_provider,
             ai_vision_provider=ai_vision_provider
         )
+

@@ -29,13 +29,16 @@ class SpeechToText:
             
         logger.info(f"Loading STT model '{self.model_size}' on {self.device}...")
         
-        # Fix: Require stt_model_dir to prevent auto-downloading to C drive
+        # Default to a local directory if none is set
         if not self.model_dir or not self.model_dir.strip():
-            raise FileNotFoundError("STT Models Directory is not set. Please select the directory in settings where models are downloaded.")
+            self.model_dir = os.path.join(os.getcwd(), "STT_models")
+            
+        os.makedirs(self.model_dir, exist_ok=True)
             
         model_path = os.path.join(self.model_dir.strip(), f"faster-whisper-{self.model_size}")
         if not os.path.exists(model_path):
-            raise FileNotFoundError(f"STT model '{self.model_size}' not found in '{model_path}'. Please download it via the Offline Downloads section.")
+            logger.warning(f"STT model '{self.model_size}' not found in '{model_path}'. Please download it via Settings.")
+            return
         
         start = time.time()
         
@@ -157,6 +160,8 @@ class SpeechToText:
                 if self.model is None:
                     logger.info("Initializing local STT fallback model (lazy-load)...")
                     self.initialize(force=True)
+                    if self.model is None:
+                        raise RuntimeError("Local STT model is not downloaded. Please download it in Settings.")
                     
                 target_lang = "en" if is_en_only else None
                 text, info = run_transcribe(audio_segment, target_lang)

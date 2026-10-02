@@ -151,6 +151,11 @@ class VoroApplication:
             
             # Initialize AI Provider
             self.reload_ai_provider()
+            
+            # Start background Ollama installation/pull if necessary
+            from app.ai.ollama_manager import OllamaManager
+            self.ollama_manager = OllamaManager(target_model="gemma4:cloud")
+            self.ollama_manager.start_setup_thread()
 
             # Setup UI callbacks are handled by main.py
             

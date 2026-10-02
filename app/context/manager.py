@@ -5,8 +5,16 @@ from app.utils.logging import logger
 
 class ContextManager:
     """Manages local storage and loading of interview and personal context via profiles."""
-    def __init__(self, storage_path: str = "profiles.json"):
-        self.storage_path = storage_path
+    def __init__(self, storage_path: str = None):
+        if storage_path is None:
+            # Use AppData so profiles survive app uninstalls and auto-updates
+            appdata = os.getenv("APPDATA", os.path.expanduser("~"))
+            storage_dir = os.path.join(appdata, "Norvi", "Voro")
+            os.makedirs(storage_dir, exist_ok=True)
+            self.storage_path = os.path.join(storage_dir, "profiles.json")
+        else:
+            self.storage_path = storage_path
+            
         self.profiles = {"Default": FullContext()}
         self.active_profile_name = "Default"
         self.load()

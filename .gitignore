@@ -46,3 +46,4 @@ STT_models/
 *.pth
 /temp_tts/
 /tests/
+/installer/

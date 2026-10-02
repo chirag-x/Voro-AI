@@ -10,7 +10,7 @@ from app.utils.logging import logger
 from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QLineEdit, QPushButton, QMessageBox, QApplication
 from PySide6.QtCore import Qt
 
-API_BASE_URL = os.getenv("NORVI_API_URL", "http://localhost:4321")
+API_BASE_URL = os.getenv("NORVI_API_URL", "https://nor-vi.in")
 LEASE_FILE = os.path.join(os.path.expanduser("~"), ".norvi_voro_lease")
 
 def get_hardware_id():

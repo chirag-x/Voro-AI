@@ -25,12 +25,13 @@ class Updater(QObject):
     def check_for_updates(self):
         def _check():
             try:
-                r = httpx.get(UPDATE_CHECK_URL, timeout=5.0)
+                r = httpx.get("https://api.github.com/repos/chirag-x/Voro--AI/releases/latest", timeout=5.0)
                 if r.status_code == 200:
                     data = r.json()
-                    latest = data.get("latest_version")
-                    url = data.get("download_url")
-                    notes = data.get("release_notes", "")
+                    latest = data.get("tag_name", "").lstrip("v")
+                    assets = data.get("assets", [])
+                    url = assets[0]["browser_download_url"] if assets else ""
+                    notes = data.get("body", "")
                     
                     if latest and self._is_newer(latest, APP_VERSION):
                         self.update_available.emit(latest, notes, url)

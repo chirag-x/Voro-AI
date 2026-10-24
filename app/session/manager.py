@@ -68,10 +68,13 @@ class SessionManager:
 
         return self._add_turn(Role.USER, text, metadata)
 
-    def add_assistant_turn(self, text: str, metadata: dict = None) -> ConversationTurn:
+    def add_assistant_turn(self, text: str, metadata: dict = None) -> Optional[ConversationTurn]:
         """Add an assistant's response to the conversation context."""
+        if not text or not str(text).strip():
+            logger.warning("[session] Ignored empty or whitespace assistant turn")
+            return None
         logger.info("[session] Assistant turn added")
-        return self._add_turn(Role.ASSISTANT, text, metadata)
+        return self._add_turn(Role.ASSISTANT, str(text).strip(), metadata)
 
     def add_system_turn(self, text: str, metadata: dict = None) -> ConversationTurn:
         """Add a system turn."""

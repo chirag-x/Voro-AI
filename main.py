@@ -1,6 +1,5 @@
 import sys
 import os
-
 # Universal fix for --noconsole crashing on print() or sys.stderr.write()
 class DummyIO:
     def write(self, *args, **kwargs): pass
@@ -16,7 +15,7 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 os.environ["OMP_NUM_THREADS"] = "4"
 os.environ["MKL_NUM_THREADS"] = "4"
 import signal
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QMessageBox
 from PySide6.QtGui import QIcon
 from app.core.norvi_gatekeeper import require_license
 from app.core.application import VoroApplication
@@ -61,13 +60,6 @@ def main():
         # Create Qt App
         qt_app = QApplication(sys.argv)
         
-        # Start Ollama Manager
-        try:
-            from app.core.ollama_manager import manager as ollama_manager
-            ollama_manager.check_and_start()
-        except Exception as e:
-            logger.error(f"Failed to initialize Ollama Manager: {e}")
-            
         # --- NORVI ANTI-PIRACY GATEKEEPER ---
         from app.core.norvi_gatekeeper import require_license
         if not require_license("voro"):
@@ -111,6 +103,7 @@ def main():
         voro_app = VoroApplication()
         bridge.model_switched.connect(voro_app.switch_model)
         bridge.profile_updated.connect(voro_app.reload_context)
+        bridge.voice_updated.connect(voro_app.set_voice)
         voro_app.on_answer_callback = bridge.answer_received.emit
         voro_app.on_answer_chunk_callback = bridge.answer_chunk_received.emit
         voro_app.on_privacy_status_callback = bridge.privacy_status_updated.emit
@@ -137,11 +130,30 @@ def main():
             try:
                 voro_app.initialize()
                 voro_app.start()
+                is_ready, setup_msg = voro_app.check_setup_status()
+                if not is_ready:
+                    logger.warning(f"[setup] {setup_msg}")
+                    bridge.error_received.emit(setup_msg)
             except Exception as e:
                 logger.error(f"Startup routine failed: {e}")
                 bridge.error_received.emit(f"Failed to start: {e}")
                 
         threading.Thread(target=startup_routine, daemon=True).start()
+
+        # Periodic Daily License Validity Heartbeat (Every 2 hours)
+        from PySide6.QtCore import QTimer
+        from app.core.norvi_gatekeeper import verify_online_lease
+        def check_license_heartbeat():
+            ok, err = verify_online_lease("voro")
+            if not ok and err and any(w in err.lower() for w in ["expired", "deactivated", "revoked", "blocked"]):
+                logger.warning(f"Background license check failed: {err}")
+                bridge.error_received.emit(f"License Alert: {err}")
+                QMessageBox.critical(None, "License Expired", f"Your license or free trial has expired or was deactivated.\n\n{err}\n\nThe application will now close.")
+                qt_app.quit()
+
+        heartbeat_timer = QTimer(qt_app)
+        heartbeat_timer.timeout.connect(check_license_heartbeat)
+        heartbeat_timer.start(2 * 60 * 60 * 1000)  # every 2 hours
         
         # Snipping Overlay Initialization
         from app.ui.snipping import SnipOverlay
@@ -149,26 +161,48 @@ def main():
         snip_overlay = SnipOverlay()
         
         def handle_snip_completed(pixmap):
+            try:
+                # Convert QPixmap to PIL image safely on the main Qt GUI thread
+                image = pixmap.toImage()
+                if image.isNull() or image.width() <= 0 or image.height() <= 0:
+                    logger.warning("[snip] Empty pixmap received")
+                    return
+                
+                from PySide6.QtCore import QByteArray, QBuffer, QIODevice
+                from PIL import Image
+                import io
+                
+                ba = QByteArray()
+                buffer = QBuffer(ba)
+                buffer.open(QIODevice.WriteOnly)
+                image.save(buffer, "PNG")
+                pil_img = Image.open(io.BytesIO(ba.data())).convert('RGB')
+            except Exception as e:
+                logger.error(f"[snip] Error converting pixmap on GUI thread: {e}")
+                bridge.processing_state_updated.emit("SCREEN CAPTURE FAILED")
+                return
+
             def process_ocr():
                 bridge.processing_state_updated.emit("ANALYZING SCREEN...")
                 try:
-                    image = pixmap.toImage()
+                    # Update multimodal context with the clean cropped screen snippet
+                    voro_app.on_snip_callback(pil_img, auto=False)
                     
-                    from PySide6.QtCore import QByteArray, QBuffer, QIODevice
-                    from PIL import Image
-                    import io
+                    # Extract OCR text from snippet
+                    extracted_text = extract_text_from_pixmap(pixmap)
                     
-                    ba = QByteArray()
-                    buffer = QBuffer(ba)
-                    buffer.open(QIODevice.WriteOnly)
-                    image.save(buffer, "PNG")
-                    
-                    pil_img = Image.open(io.BytesIO(ba.data())).convert('RGB')
-                    
-                    voro_app.on_snip_callback(pil_img, auto=True)
+                    if extracted_text and extracted_text.strip():
+                        display_text = f"[Screen Snip]:\n{extracted_text.strip()}"
+                        prompt = f"Here is what is on my screen:\n\n{extracted_text.strip()}\n\nPlease explain and solve this."
+                    else:
+                        display_text = "[Screen Snip]"
+                        prompt = "Please analyze and explain the code or question in this screen capture."
+                        
+                    bridge.user_input_received.emit(display_text)
+                    voro_app.inject_user_input(prompt)
                     bridge.processing_state_updated.emit("")
                 except Exception as e:
-                    logger.error(f"Error converting snip to image: {e}")
+                    logger.error(f"Error processing snip: {e}", exc_info=True)
                     bridge.processing_state_updated.emit("SCREEN CAPTURE FAILED")
             # Process in thread to avoid blocking Qt
             threading.Thread(target=process_ocr, daemon=True).start()
@@ -211,7 +245,8 @@ def main():
             # Mute Hotkeys
             def toggle_mute_mic(*args):
                 logger.debug("Toggle mute mic triggered")
-                voro_app.config.mute_user_mic = not voro_app.config.mute_user_mic
+                new_state = not getattr(voro_app.config, 'mute_user_mic', False)
+                voro_app.set_mute_user_mic(new_state)
                 state = "MUTED" if voro_app.config.mute_user_mic else "UNMUTED"
                 bridge.processing_state_updated.emit(f"USER MIC {state}")
                 import os
@@ -222,7 +257,8 @@ def main():
                 bridge.config_updated.emit()
                 
             def toggle_mute_sys(*args):
-                voro_app.config.mute_system_audio = not voro_app.config.mute_system_audio
+                new_state = not getattr(voro_app.config, 'mute_system_audio', False)
+                voro_app.set_mute_system_audio(new_state)
                 state = "MUTED" if voro_app.config.mute_system_audio else "UNMUTED"
                 bridge.processing_state_updated.emit(f"SYS AUDIO {state}")
                 import os
@@ -242,7 +278,8 @@ def main():
             logger.info(f"Mute System Audio hotkey registered: {sys_hotkey}")
             
             def toggle_mute_tts(*args):
-                voro_app.config.ui_tts_muted = not getattr(voro_app.config, 'ui_tts_muted', False)
+                new_state = not getattr(voro_app.config, 'ui_tts_muted', False)
+                voro_app.config.ui_tts_muted = new_state
                 state = "MUTED" if voro_app.config.ui_tts_muted else "UNMUTED"
                 bridge.processing_state_updated.emit(f"VORO VOICE {state}")
                 import os
@@ -253,6 +290,25 @@ def main():
                 bridge.config_updated.emit()
                 if voro_app.config.ui_tts_muted:
                     bridge.tts_stop.emit()
+                else:
+                    def _show_warn():
+                        from PySide6.QtWidgets import QMessageBox
+                        from app.ui.theme import style_message_box
+                        box = QMessageBox(overlay)
+                        theme_mode = getattr(voro_app.config, 'ui_theme_mode', 'system')
+                        style_message_box(box, theme_mode=theme_mode, parent=overlay)
+                        box.setIcon(QMessageBox.Icon.Warning)
+                        box.setWindowTitle("Experimental Feature Notice")
+                        box.setText(
+                            "<b>Voro Voice is currently in development.</b><br><br>"
+                            "This feature is not supported or isolated on all devices.<br><br>"
+                            "<b>Do not use this for interviews without checking and testing first.</b>"
+                        )
+                        box.setStandardButtons(QMessageBox.StandardButton.Ok)
+                        if not os.environ.get("PYTEST_CURRENT_TEST"):
+                            box.exec()
+                    from PySide6.QtCore import QTimer
+                    QTimer.singleShot(0, _show_warn)
             
             tts_hotkey = getattr(voro_app.config, 'ui_tts_mute_hotkey', 'ctrl+shift+x')
             keyboard.add_hotkey(tts_hotkey, toggle_mute_tts)
@@ -263,10 +319,38 @@ def main():
             overlay.sys_mic_toggled.connect(toggle_mute_sys)
             overlay.tts_toggled.connect(toggle_mute_tts)
             
-            # Cycle Mode Hotkey
-            cycle_hotkey = getattr(voro_app.config, 'ui_cycle_mode_hotkey', 'ctrl+shift+v')
-            keyboard.add_hotkey(cycle_hotkey, voro_app.cycle_activation_mode)
-            logger.info(f"Cycle Mode hotkey registered: {cycle_hotkey}")
+            def toggle_auto_answer(*args):
+                new_state = not getattr(voro_app.config, 'ui_auto_answer', True)
+                voro_app.set_auto_answer(new_state)
+                state = "AUTO" if new_state else "MANUAL"
+                bridge.processing_state_updated.emit(f"MODE: {state} ANSWER")
+                import os
+                from dotenv import set_key
+                val = str(new_state)
+                os.environ["UI_AUTO_ANSWER"] = val
+                set_key(get_env_path(), "UI_AUTO_ANSWER", val)
+                bridge.config_updated.emit()
+
+            def trigger_manual_answer(*args):
+                logger.info("Triggering manual answer...")
+                voro_app.trigger_manual_answer()
+
+            auto_ans_hotkey = getattr(voro_app.config, 'ui_auto_answer_hotkey', 'ctrl+shift+u')
+            manual_ans_hotkey = getattr(voro_app.config, 'ui_manual_answer_hotkey', 'ctrl+enter')
+            try:
+                keyboard.add_hotkey(auto_ans_hotkey, toggle_auto_answer)
+                logger.info(f"Auto-Answer toggle hotkey registered: {auto_ans_hotkey}")
+            except Exception as e:
+                logger.warning(f"Could not register auto-answer hotkey {auto_ans_hotkey}: {e}")
+
+            try:
+                keyboard.add_hotkey(manual_ans_hotkey, trigger_manual_answer)
+                logger.info(f"Manual Answer trigger hotkey registered: {manual_ans_hotkey}")
+            except Exception as e:
+                logger.warning(f"Could not register manual-answer hotkey {manual_ans_hotkey}: {e}")
+
+            overlay.auto_answer_toggled.connect(toggle_auto_answer)
+            overlay.manual_answer_requested.connect(trigger_manual_answer)
             
             # Quick Prompts Hotkeys
             def make_quick_prompt_handler(prompt_text):
@@ -306,11 +390,6 @@ def main():
         exit_code = qt_app.exec()
         
         # Shutdown core gracefully
-        try:
-            from app.core.ollama_manager import manager as ollama_manager
-            ollama_manager.shutdown()
-        except Exception:
-            pass
         voro_app.shutdown()
         sys.exit(exit_code)
         

@@ -5,9 +5,10 @@ from dotenv import set_key
 from PySide6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, 
                                QLineEdit, QPushButton, QMessageBox, QSlider, QColorDialog,
                                QListWidget, QStackedWidget, QWidget, QCheckBox, QComboBox, QTextEdit, QScrollArea,
-                               QRadioButton, QGroupBox, QButtonGroup)
+                               QRadioButton, QGroupBox, QButtonGroup, QFrame)
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QColor
+from app.utils.logging import logger
 from app.core.config import load_config
 from app.context.manager import ContextManager
 
@@ -121,10 +122,31 @@ class ModelDownloadThread(QThread):
                     outer_self.progress.emit(self.n, self.total, msg)
         
         try:
+            import huggingface_hub.utils as hf_utils
+            import huggingface_hub.file_download as hf_dl
+            
+            # Store original references to restore later
+            orig_utils_tqdm = getattr(hf_utils, 'tqdm', None)
+            orig_dl_tqdm = getattr(hf_dl, 'tqdm', None)
+            
+            # Patch everywhere
             hf_utils.tqdm = CustomTqdm
+            hf_dl.tqdm = CustomTqdm
+            
+            try:
+                import importlib
+                hf_prog = importlib.import_module("huggingface_hub.utils._progress")
+                orig_prog_tqdm = getattr(hf_prog, 'tqdm', None)
+                hf_prog.tqdm = CustomTqdm
+            except Exception:
+                orig_prog_tqdm = None
             
             import os
-            base_dir = self.download_dir if self.download_dir.strip() else os.path.join(os.path.expanduser("~"), ".cache", "huggingface", "hub")
+            if self.download_dir.strip():
+                base_dir = self.download_dir
+            else:
+                appdata = os.environ.get('APPDATA', os.path.expanduser("~"))
+                base_dir = os.path.join(appdata, "Norvi", "Voro", "STT_Models")
             target_dir = os.path.join(base_dir, f"faster-whisper-{self.model_size}")
             os.makedirs(target_dir, exist_ok=True)
             
@@ -136,45 +158,69 @@ class ModelDownloadThread(QThread):
         except Exception as e:
             self.finished.emit(False, str(e))
         finally:
-            hf_utils.tqdm = self._orig_tqdm
+            hf_utils.tqdm = orig_utils_tqdm
+            hf_dl.tqdm = orig_dl_tqdm
+            if orig_prog_tqdm is not None:
+                try:
+                    import importlib
+                    hf_prog = importlib.import_module("huggingface_hub.utils._progress")
+                    hf_prog.tqdm = orig_prog_tqdm
+                except Exception:
+                    pass
 
 class CollapsibleBox(QWidget):
-    def __init__(self, title="", parent=None):
+    def __init__(self, title="", parent=None, is_dark=None):
         super().__init__(parent)
+        if is_dark is None:
+            if hasattr(parent, 'theme'):
+                is_dark = parent.theme.get('bg', '#1E1E1E') == '#1E1E1E'
+            else:
+                try:
+                    from app.ui.theme import is_windows_dark_mode
+                    is_dark = is_windows_dark_mode()
+                except Exception:
+                    is_dark = True
+
+        btn_bg = "#2D333B" if is_dark else "#F6F8FA"
+        btn_fg = "#FFFFFF" if is_dark else "#1F2328"
+        btn_border = "#444C56" if is_dark else "#D0D7DE"
+        btn_hover = "#373E47" if is_dark else "#ECEFF2"
+        btn_checked = "#1E2329" if is_dark else "#EAEFF5"
+
         self.toggle_button = QPushButton(title)
         self.toggle_button.setCheckable(True)
         self.toggle_button.setCursor(Qt.PointingHandCursor)
-        self.toggle_button.setStyleSheet("""
-            QPushButton {
+        self.toggle_button.setStyleSheet(f"""
+            QPushButton {{
                 text-align: left;
                 padding: 12px 15px;
-                background-color: #2D333B;
-                color: #FFFFFF;
-                border: 1px solid #444C56;
+                background-color: {btn_bg};
+                color: {btn_fg};
+                border: 1px solid {btn_border};
                 border-radius: 6px;
                 font-weight: bold;
                 font-size: 13px;
-            }
-            QPushButton:hover {
-                background-color: #373E47;
-            }
-            QPushButton:checked {
+            }}
+            QPushButton:hover {{
+                background-color: {btn_hover};
+            }}
+            QPushButton:checked {{
                 border-bottom-left-radius: 0px;
                 border-bottom-right-radius: 0px;
                 border-bottom: none;
-                background-color: #1E2329;
-            }
+                background-color: {btn_checked};
+            }}
         """)
         
         self.content_area = QWidget()
-        self.content_area.setStyleSheet("""
-            QWidget#content_area {
+        self.content_area.setStyleSheet(f"""
+            QWidget#content_area {{
                 background-color: transparent;
-                border: 1px solid #444C56;
+                border: 1px solid {btn_border};
                 border-top: none;
                 border-bottom-left-radius: 6px;
                 border-bottom-right-radius: 6px;
-            }
+            }}
         """)
         self.content_area.setObjectName("content_area")
         self.content_layout = QVBoxLayout(self.content_area)
@@ -196,21 +242,39 @@ class CollapsibleBox(QWidget):
     def addLayout(self, layout):
         self.content_layout.addLayout(layout)
 
+    def expand(self):
+        self.toggle_button.setChecked(True)
+
+    def collapse(self):
+        self.toggle_button.setChecked(False)
+
 class SettingsDialog(QDialog):
     def __init__(self, context_manager: ContextManager, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Voro Settings")
+        is_stealth = bool(parent and getattr(parent, '_stealth_active', False))
+        if is_stealth:
+            self.setWindowTitle("")
+            self.setWindowFlags(self.windowFlags() | Qt.Tool)
+        else:
+            self.setWindowTitle("Voro Settings")
         
         self.config = load_config()
-        if self.config.ui_settings_win_x != -1:
-            self.setGeometry(
-                self.config.ui_settings_win_x,
-                self.config.ui_settings_win_y,
-                self.config.ui_settings_win_w,
-                self.config.ui_settings_win_h
-            )
+        
+        from PySide6.QtCore import QSettings
+        self._qsettings = QSettings("Norvi", "Voro")
+        geom = self._qsettings.value("settings_geometry")
+        if geom:
+            self.restoreGeometry(geom)
         else:
-            self.resize(900, 650)
+            if self.config.ui_settings_win_x != -1:
+                self.setGeometry(
+                    self.config.ui_settings_win_x,
+                    self.config.ui_settings_win_y,
+                    self.config.ui_settings_win_w,
+                    self.config.ui_settings_win_h
+                )
+            else:
+                self.resize(900, 650)
         self.context_manager = context_manager
         from app.core.config import get_env_path
         self.env_path = get_env_path()
@@ -305,6 +369,28 @@ class SettingsDialog(QDialog):
         }}
         QPushButton[class="primary"]:hover {{
             background-color: #0066CC;
+        }}
+        QMessageBox {{
+            background-color: {bg_main};
+            color: {text_col};
+        }}
+        QMessageBox QLabel {{
+            color: {text_col};
+            font-size: 13px;
+            background-color: transparent;
+        }}
+        QMessageBox QPushButton {{
+            background-color: {accent};
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 20px;
+            font-weight: bold;
+            font-size: 13px;
+            min-width: 70px;
+        }}
+        QMessageBox QPushButton:hover {{
+            background-color: #004080;
         }}
         QLineEdit, QComboBox, NoScrollComboBox {{
             background-color: {input_bg};
@@ -416,7 +502,8 @@ class SettingsDialog(QDialog):
         self._last_selected_profile = self.context_manager.active_profile_name
         
         # Signature
-        self.sig_label = QLabel("Designed and Developed by <a href='https://nor-vi.in/' style='color:#0055A4; text-decoration:none;'>Norvi Agency</a>")
+        sig_link_col = "#38BDF8" if is_dark else "#0055A4"
+        self.sig_label = QLabel(f"Designed and Developed by <a href='https://nor-vi.in/' style='color:{sig_link_col}; text-decoration:none;'>Norvi Agency</a>")
         self.sig_label.setOpenExternalLinks(True)
         self.sig_label.setAlignment(Qt.AlignRight)
         self.sig_label.setStyleSheet(f"font-size: 11px; color: {self.theme.get('base_text', '#888')}; margin-bottom: 10px;")
@@ -424,7 +511,7 @@ class SettingsDialog(QDialog):
         
         # Action Buttons (Bottom)
         btn_layout = QHBoxLayout()
-        save_btn = QPushButton("Save & Restart")
+        save_btn = QPushButton("Save && Restart")
         save_btn.setProperty("class", "primary")
         save_btn.clicked.connect(self.save_settings)
         close_btn = QPushButton("Cancel")
@@ -499,6 +586,11 @@ class SettingsDialog(QDialog):
         btn.setCheckable(True)
         btn.setChecked(default_checked)
         btn.setCursor(Qt.PointingHandCursor)
+        is_dark = self.theme.get('bg', '#1E1E1E') == '#1E1E1E'
+        disabled_bg = "#444444" if is_dark else "#E5E5E5"
+        disabled_fg = "#AAAAAA" if is_dark else "#555555"
+        disabled_border = "#555555" if is_dark else "#CCCCCC"
+
         def _update(checked):
             is_active = not checked if inverted else checked
             if is_active:
@@ -506,121 +598,16 @@ class SettingsDialog(QDialog):
                 btn.setStyleSheet("QPushButton { background-color: #0078D7; color: white; border: none; padding: 6px; border-radius: 4px; font-weight: bold; }")
             else:
                 btn.setText(text_disabled)
-                btn.setStyleSheet("QPushButton { background-color: #444; color: #aaa; border: 1px solid #555; padding: 6px; border-radius: 4px; font-weight: bold; }")
+                btn.setStyleSheet(f"QPushButton {{ background-color: {disabled_bg}; color: {disabled_fg}; border: 1px solid {disabled_border}; padding: 6px; border-radius: 4px; font-weight: bold; }}")
         btn.toggled.connect(_update)
         _update(default_checked)
         return btn
 
-    def _validate_premium(self):
-        from PySide6.QtWidgets import QMessageBox
-        import httpx
-        
-        key = self.premium_key_input.text().strip()
-        model = self.premium_model_input.text().strip()
-        
-        if not key or not model:
-            QMessageBox.warning(self, "Error", "Please enter both an API key and a model name.")
-            return
-            
-        self.btn_validate_premium.setText("Validating...")
-        self.btn_validate_premium.setEnabled(False)
-        
-        try:
-            if "OpenAI" in getattr(self, 'premium_provider_combo', NoScrollComboBox()).currentText():
-                url = "https://api.openai.com/v1/models"
-                headers = {"Authorization": f"Bearer {key}"}
-            else:
-                QMessageBox.information(self, "Notice", "Format accepted. True validation will occur on first request.")
-                self.btn_validate_premium.setText("Validate Premium Key & Model")
-                self.btn_validate_premium.setEnabled(True)
-                return
-
-            r = httpx.get(url, headers=headers, timeout=5.0)
-            if r.status_code == 200:
-                QMessageBox.information(self, "Success", f"API Key is valid!\nModel: {model} is ready.")
-            else:
-                QMessageBox.warning(self, "Validation Failed", f"Invalid API Key. Code: {r.status_code}")
-        except Exception as e:
-            QMessageBox.warning(self, "Error", f"Failed to connect: {e}")
-        finally:
-            self.btn_validate_premium.setText("Validate Premium Key & Model")
-            self.btn_validate_premium.setEnabled(True)
-
-    def _validate_local(self, silent=False):
-        from PySide6.QtWidgets import QMessageBox
-        import httpx
-        
-        if not silent:
-            self.btn_validate_local.setText("Fetching...")
-            self.btn_validate_local.setEnabled(False)
-            
-        available_models = []
-        try:
-            r = httpx.get("http://localhost:11434/api/tags", timeout=2.0)
-            if r.status_code == 200:
-                available_models = [m["name"] for m in r.json().get("models", [])]
-                if not silent:
-                    QMessageBox.information(self, "Success", f"Found {len(available_models)} local models!")
-            elif not silent:
-                QMessageBox.warning(self, "Error", f"Ollama returned status code: {r.status_code}")
-        except Exception as e:
-            if not silent:
-                QMessageBox.warning(self, "Error", f"Could not connect to Ollama. Is it running?\n\n{e}")
-                
-        if available_models:
-            self.ollama_chat_combo.clear()
-            self.ollama_coding_combo.clear()
-            self.ollama_chat_combo.addItems(available_models)
-            self.ollama_coding_combo.addItem("(none - use Chat model)")
-            self.ollama_coding_combo.addItems(available_models)
-            
-        if not silent:
-            self.btn_validate_local.setText("Fetch & Validate Local Models")
-            self.btn_validate_local.setEnabled(True)
-    def _sync_active_model_combo(self):
-        current_active = self.active_model_combo.currentText()
-        self.active_model_combo.blockSignals(True)
-        self.active_model_combo.clear()
-        models = [le.text().strip() for le in self.model_inputs if le.text().strip()]
-        self.active_model_combo.addItems(models)
-        if current_active in models:
-            self.active_model_combo.setCurrentText(current_active)
-        elif models:
-            self.active_model_combo.setCurrentText(models[0])
-        self.active_model_combo.blockSignals(False)
-        
-    def validate_models(self):
-        self.btn_validate.setEnabled(False)
-        self.btn_validate.setText("Testing...")
-        for lbl in self.model_status_labels:
-            lbl.setText("⏳")
-            
-        key = self.key_input.text().strip()
-        models = [le.text().strip() for le in self.model_inputs if le.text().strip()]
-        
-        self.validator = ValidatorThread(key, models, self.config.openrouter_base_url)
-        self.validator.result_ready.connect(self.on_validation_result)
-        self.validator.finished_validation.connect(self.on_validation_finished)
-        self.validator.start()
-        
-    def on_validation_result(self, model_name, is_valid, err):
-        for idx, le in enumerate(self.model_inputs):
-            if le.text().strip() == model_name:
-                self.model_status_labels[idx].setText("✅" if is_valid else "❌")
-                self.model_status_labels[idx].setToolTip(err if not is_valid else "Working")
-                
-    def on_validation_finished(self):
-        self.btn_validate.setEnabled(True)
-        self.btn_validate.setText("Validate Key & Models")
-        # Clear loading for empty fields
-        for le, lbl in zip(self.model_inputs, self.model_status_labels):
-            if not le.text().strip() and lbl.text() == "⏳":
-                lbl.setText("")
-
     def showEvent(self, event):
         super().showEvent(event)
         # Apply stealth mode to this dialog if the parent window has it enabled
-        if self.parent() and hasattr(self.parent(), '_stealth_active') and self.parent()._stealth_active:
+        if self.parent() and getattr(self.parent(), '_stealth_active', False):
+            self.setWindowTitle("")
             if hasattr(self.parent(), '_apply_privacy_flag'):
                 self.parent()._apply_privacy_flag(stealth=True, target_hwnd=int(self.winId()))
                 
@@ -759,6 +746,9 @@ class SettingsDialog(QDialog):
         self.chk_pos = self._create_toggle_btn(self.config.ui_remember_position, "Remember Position Enabled", "Remember Position Disabled")
         layout.addWidget(self.chk_pos)
         
+        self.chk_auto_answer = self._create_toggle_btn(getattr(self.config, 'ui_auto_answer', True), "Auto-Answer Questions: ENABLED", "Auto-Answer Questions: DISABLED (Manual Mode)")
+        layout.addWidget(self.chk_auto_answer)
+        
         layout.addSpacing(10)
         layout.addWidget(_make_section_header("AI Engine Personality & Tone", self.theme))
         
@@ -824,7 +814,7 @@ class SettingsDialog(QDialog):
         
         self.stt_dir_input = QLineEdit()
         self.stt_dir_input.setText(getattr(self.config, 'stt_model_dir', ''))
-        self.stt_dir_input.setPlaceholderText("Directory where models are downloaded...")
+        self.stt_dir_input.setPlaceholderText("Default (Matches Model Save Directory)")
         
         stt_dir_box = QWidget()
         stt_dir_l = QHBoxLayout(stt_dir_box)
@@ -864,7 +854,7 @@ class SettingsDialog(QDialog):
         self.dl_dir_input = QLineEdit()
         saved_dir = getattr(self.config, 'stt_model_dir', '')
         self.dl_dir_input.setText(saved_dir)
-        self.dl_dir_input.setPlaceholderText("Default (C:\\Users\\...\\.cache\\huggingface\\hub)")
+        self.dl_dir_input.setPlaceholderText("Default (%APPDATA%\\Norvi\\Voro\\STT_Models)")
         
         dir_box = QWidget()
         dir_l = QHBoxLayout(dir_box)
@@ -945,6 +935,12 @@ class SettingsDialog(QDialog):
         self.stealth_hotkey_input = self._create_hk_input(getattr(self.config, 'ui_stealth_hotkey', 'ctrl+shift+g'))
         form.addRow("Stealth Mode Hotkey:", self.stealth_hotkey_input)
         
+        self.auto_answer_hotkey_input = self._create_hk_input(getattr(self.config, 'ui_auto_answer_hotkey', 'ctrl+shift+u'))
+        form.addRow("Toggle Auto-Answer Hotkey:", self.auto_answer_hotkey_input)
+        
+        self.manual_answer_hotkey_input = self._create_hk_input(getattr(self.config, 'ui_manual_answer_hotkey', 'ctrl+enter'))
+        form.addRow("Trigger Manual Answer Hotkey:", self.manual_answer_hotkey_input)
+        
         hk_layout.addLayout(form)
         layout.addWidget(hk_frame)
         
@@ -955,7 +951,9 @@ class SettingsDialog(QDialog):
         
         stealth_hint = QLabel("When Stealth Mode is ON, Voro is completely invisible to screen recording,\nscreenshots, and screenshares. Toggle with the hotkey above or the button below.")
         stealth_hint.setWordWrap(True)
-        stealth_hint.setStyleSheet("color: #aaaaaa; font-size: 12px;")
+        is_dark = self.theme.get('bg', '#1E1E1E') == '#1E1E1E'
+        hint_col = "#aaaaaa" if is_dark else "#555555"
+        stealth_hint.setStyleSheet(f"color: {hint_col}; font-size: 12px;")
         layout.addWidget(stealth_hint)
         
         stealth_val = getattr(self.config, 'ui_stealth_mode', False)
@@ -967,6 +965,15 @@ class SettingsDialog(QDialog):
         scroll.setWidget(inner)
         main_layout.addWidget(scroll)
         self.pages.addWidget(page)
+        
+    def _open_setup_browser(self):
+        import webbrowser
+        webbrowser.open("https://ollama.com/download/OllamaSetup.exe")
+
+    def _navigate_to_setup(self):
+        self.sidebar.setCurrentRow(8)
+        if hasattr(self, 'box_setup'):
+            self.box_setup.expand()
         
     def setup_vision_page(self):
         page = QWidget()
@@ -1145,11 +1152,16 @@ class SettingsDialog(QDialog):
         form_mic.addRow("Mute Toggle Hotkey:", self.mute_mic_hotkey_input)
         user_layout.addLayout(form_mic)
         
+        is_dark = self.theme.get('bg', '#1E1E1E') == '#1E1E1E'
+        disabled_bg = "#444444" if is_dark else "#E5E5E5"
+        disabled_fg = "#AAAAAA" if is_dark else "#555555"
+        disabled_border = "#555555" if is_dark else "#CCCCCC"
+
         def _toggle_mic(checked):
             self.user_device_combo.setEnabled(not checked)
             if checked:
                 self.btn_mute_mic.setText("User Mic Disabled")
-                self.btn_mute_mic.setStyleSheet("QPushButton { background-color: #444; color: #aaa; border: 1px solid #555; padding: 6px; border-radius: 4px; font-weight: bold; }")
+                self.btn_mute_mic.setStyleSheet(f"QPushButton {{ background-color: {disabled_bg}; color: {disabled_fg}; border: 1px solid {disabled_border}; padding: 6px; border-radius: 4px; font-weight: bold; }}")
             else:
                 self.btn_mute_mic.setText("User Mic Enabled")
                 self.btn_mute_mic.setStyleSheet("QPushButton { background-color: #0078D7; color: white; border: none; padding: 6px; border-radius: 4px; font-weight: bold; }")
@@ -1204,7 +1216,7 @@ class SettingsDialog(QDialog):
             self.sys_device_combo.setEnabled(not checked)
             if checked:
                 self.btn_mute_sys.setText("System Audio Disabled")
-                self.btn_mute_sys.setStyleSheet("QPushButton { background-color: #444; color: #aaa; border: 1px solid #555; padding: 6px; border-radius: 4px; font-weight: bold; }")
+                self.btn_mute_sys.setStyleSheet(f"QPushButton {{ background-color: {disabled_bg}; color: {disabled_fg}; border: 1px solid {disabled_border}; padding: 6px; border-radius: 4px; font-weight: bold; }}")
             else:
                 self.btn_mute_sys.setText("System Audio Enabled")
                 self.btn_mute_sys.setStyleSheet("QPushButton { background-color: #0078D7; color: white; border: none; padding: 6px; border-radius: 4px; font-weight: bold; }")
@@ -1221,6 +1233,26 @@ class SettingsDialog(QDialog):
         tts_frame.setStyleSheet(f"#AudioBox {{ border: 1px solid {self.theme.get('border', '#555')}; border-radius: 6px; }}")
         tts_layout = QVBoxLayout(tts_frame)
         tts_layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Development Warning Banner
+        warn_box = QFrame()
+        warn_bg = "#2D2206" if is_dark else "#FFF8E1"
+        warn_border = "#B27B00" if is_dark else "#FFE082"
+        warn_text = "#FFE082" if is_dark else "#8C5400"
+        warn_box.setStyleSheet(f"QFrame {{ background-color: {warn_bg}; border: 1px solid {warn_border}; border-radius: 6px; }}")
+        warn_box_layout = QVBoxLayout(warn_box)
+        warn_box_layout.setContentsMargins(10, 8, 10, 8)
+        
+        warn_title = QLabel("⚠️ Development Notice:")
+        warn_title.setStyleSheet(f"font-weight: bold; color: {warn_text}; font-size: 11px; border: none; background: transparent;")
+        warn_box_layout.addWidget(warn_title)
+        
+        warn_msg = QLabel("Voro Voice is an experimental feature currently under active development. It is not supported or isolated on all devices. Do not use for interviews without checking and testing first.")
+        warn_msg.setWordWrap(True)
+        warn_msg.setStyleSheet(f"color: {warn_text}; font-size: 11px; border: none; background: transparent;")
+        warn_box_layout.addWidget(warn_msg)
+        
+        tts_layout.addWidget(warn_box)
         
         self.btn_tts_muted = QPushButton()
         self.btn_tts_muted.setCheckable(True)
@@ -1332,13 +1364,32 @@ class SettingsDialog(QDialog):
             self.btn_test_voice.setEnabled(not checked)
             if checked:
                 self.btn_tts_muted.setText("Voro Voice (TTS) Disabled")
-                self.btn_tts_muted.setStyleSheet("QPushButton { background-color: #444; color: #aaa; border: 1px solid #555; padding: 6px; border-radius: 4px; font-weight: bold; }")
+                self.btn_tts_muted.setStyleSheet(f"QPushButton {{ background-color: {disabled_bg}; color: {disabled_fg}; border: 1px solid {disabled_border}; padding: 6px; border-radius: 4px; font-weight: bold; }}")
             else:
                 self.btn_tts_muted.setText("Voro Voice (TTS) Enabled")
                 self.btn_tts_muted.setStyleSheet("QPushButton { background-color: #0078D7; color: white; border: none; padding: 6px; border-radius: 4px; font-weight: bold; }")
             
         self.btn_tts_muted.toggled.connect(_toggle_tts)
         _toggle_tts(self.btn_tts_muted.isChecked())
+
+        def _on_tts_clicked():
+            if not self.btn_tts_muted.isChecked():
+                from PySide6.QtWidgets import QMessageBox
+                from app.ui.theme import style_message_box
+                box = QMessageBox(self)
+                theme_mode = getattr(self.config, 'ui_theme_mode', 'system')
+                style_message_box(box, theme_mode=theme_mode, parent=self)
+                box.setIcon(QMessageBox.Icon.Warning)
+                box.setWindowTitle("Experimental Feature Notice")
+                box.setText(
+                    "<b>Voro Voice is currently in development.</b><br><br>"
+                    "This feature is not supported or isolated on all devices.<br><br>"
+                    "<b>Do not use this for interviews without testing your device setup first.</b>"
+                )
+                box.setStandardButtons(QMessageBox.StandardButton.Ok)
+                if not os.environ.get("PYTEST_CURRENT_TEST"):
+                    box.exec()
+        self.btn_tts_muted.clicked.connect(_on_tts_clicked)
         
         inner_layout.addWidget(tts_frame)
         
@@ -1347,65 +1398,131 @@ class SettingsDialog(QDialog):
         layout.addWidget(scroll)
         self.pages.addWidget(page)
 
+    def _reset_test_voice_btn(self):
+        """Resets the Test Voice button state."""
+        if hasattr(self, 'btn_test_voice') and self.btn_test_voice:
+            self.btn_test_voice.setText("Test Voice")
+            if hasattr(self, 'btn_tts_muted') and self.btn_tts_muted:
+                self.btn_test_voice.setEnabled(not self.btn_tts_muted.isChecked())
+            else:
+                self.btn_test_voice.setEnabled(True)
+
     def _test_voice(self):
-        voice_id = self.voice_combo.currentText().split(" ")[0]
+        if hasattr(self, '_test_player') and self._test_player:
+            try:
+                self._test_player.stop()
+            except Exception:
+                pass
+
+        voice_id = self.voice_combo.currentText().split(" ")[0].strip()
+        speed_rate = self.tts_speed_combo.currentText().strip() if hasattr(self, 'tts_speed_combo') else '+0%'
+        
         self.btn_test_voice.setText("Playing...")
         self.btn_test_voice.setEnabled(False)
-        def _reset():
-            self.btn_test_voice.setText("Test Voice")
-            self.btn_test_voice.setEnabled(True)
-        # Play using QMediaPlayer
+
+        # Safety watchdog timer: resets button in 8 seconds regardless of network or media stalls
+        from PySide6.QtCore import QTimer
+        if hasattr(self, '_test_watchdog') and self._test_watchdog:
+            self._test_watchdog.stop()
+        self._test_watchdog = QTimer(self)
+        self._test_watchdog.setSingleShot(True)
+        self._test_watchdog.timeout.connect(self._reset_test_voice_btn)
+        self._test_watchdog.start(8000)
+
         import threading
         def fetch_audio():
-            import edge_tts, asyncio, tempfile
-            async def run():
-                communicate = edge_tts.Communicate("Hello, I am Voro. This is how I sound.", voice_id)
-                tmp = tempfile.mktemp(suffix=".mp3")
-                await communicate.save(tmp)
-                return tmp
-            return asyncio.run(run())
+            import tempfile, time, os
+            tmp_dir = os.path.join(tempfile.gettempdir(), "Voro_TTS_Test")
+            os.makedirs(tmp_dir, exist_ok=True)
+            mp3_path = os.path.join(tmp_dir, f"test_voice_{int(time.time()*1000)}.mp3")
             
-        def on_fetched(filepath):
-            from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
-            from PySide6.QtCore import QUrl
-            if not hasattr(self, '_test_player'):
-                self._test_player = QMediaPlayer()
-                self._test_audio = QAudioOutput()
-                self._test_player.setAudioOutput(self._test_audio)
-                self._test_player.mediaStatusChanged.connect(self._on_test_status)
-            self._test_player.setSource(QUrl.fromLocalFile(filepath))
-            self._test_player.play()
-            
+            # 1. Attempt Edge TTS
+            try:
+                import edge_tts, asyncio
+                async def run_edge():
+                    comm = edge_tts.Communicate("Hello, I am Voro. This is how I sound.", voice_id, rate=speed_rate)
+                    await comm.save(mp3_path)
+                asyncio.run(asyncio.wait_for(run_edge(), timeout=4.5))
+                if os.path.exists(mp3_path) and os.path.getsize(mp3_path) > 0:
+                    return mp3_path
+            except Exception as e:
+                logger.warning(f"[settings] Test voice Edge TTS failed ({e}). Falling back to local Windows SAPI...")
+
+            # 2. Resilient Fallback: Local Windows SAPI
+            from app.audio.tts import _synthesize_local_sapi
+            wav_path = mp3_path.replace(".mp3", ".wav")
+            if _synthesize_local_sapi("Hello, I am Voro. This is how I sound.", wav_path):
+                return wav_path
+
+            raise RuntimeError("Both Edge TTS and local SAPI synthesis failed")
+
         def thread_task():
             try:
                 fp = fetch_audio()
                 from PySide6.QtCore import QMetaObject, Qt, Q_ARG
                 QMetaObject.invokeMethod(self, "_play_test_audio", Qt.QueuedConnection, Q_ARG(str, fp))
             except Exception as e:
+                logger.error(f"[settings] Test voice failed: {e}")
                 from PySide6.QtCore import QTimer
-                QTimer.singleShot(0, _reset)
-                
-        self._test_reset_fn = _reset
+                QTimer.singleShot(0, self._reset_test_voice_btn)
+
         threading.Thread(target=thread_task, daemon=True).start()
-        
 
     @Slot(str)
     def _play_test_audio(self, filepath):
-        from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+        from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QMediaDevices
         from PySide6.QtCore import QUrl
-        if not hasattr(self, '_test_player'):
-            self._test_player = QMediaPlayer()
-            self._test_audio = QAudioOutput()
-            self._test_player.setAudioOutput(self._test_audio)
-            self._test_player.mediaStatusChanged.connect(self._on_test_status)
-        self._test_player.setSource(QUrl.fromLocalFile(filepath))
-        self._test_player.play()
+        try:
+            if not hasattr(self, '_test_player') or self._test_player is None:
+                self._test_player = QMediaPlayer(self)
+                self._test_audio = QAudioOutput(self)
+                self._test_player.setAudioOutput(self._test_audio)
+                self._test_player.mediaStatusChanged.connect(self._on_test_status)
+                self._test_player.errorOccurred.connect(self._on_test_error)
+
+            self._test_player.stop()
+
+            # Apply output device
+            if hasattr(self, 'tts_output_device_combo'):
+                target_name = self.tts_output_device_combo.currentText().strip()
+                if target_name == "Default System Device":
+                    self._test_audio.setDevice(QMediaDevices.defaultAudioOutput())
+                else:
+                    for dev in QMediaDevices.audioOutputs():
+                        if dev.description() == target_name:
+                            self._test_audio.setDevice(dev)
+                            break
+
+            # Apply volume
+            vol = self.tts_vol_slider.value() if hasattr(self, 'tts_vol_slider') else 100
+            self._test_audio.setVolume(vol / 100.0)
+
+            self._current_test_filepath = filepath
+            self._test_player.setSource(QUrl.fromLocalFile(filepath))
+            self._test_player.play()
+        except Exception as e:
+            logger.error(f"[settings] Error playing test audio: {e}")
+            self._reset_test_voice_btn()
 
     def _on_test_status(self, status):
         from PySide6.QtMultimedia import QMediaPlayer
-        if status == QMediaPlayer.MediaStatus.EndOfMedia:
-            if hasattr(self, '_test_reset_fn'):
-                self._test_reset_fn()
+        if status in (QMediaPlayer.MediaStatus.EndOfMedia, QMediaPlayer.MediaStatus.InvalidMedia):
+            if hasattr(self, '_test_watchdog') and self._test_watchdog:
+                self._test_watchdog.stop()
+            self._reset_test_voice_btn()
+            # Clean up temp file
+            if hasattr(self, '_current_test_filepath') and self._current_test_filepath:
+                try:
+                    if os.path.exists(self._current_test_filepath):
+                        os.remove(self._current_test_filepath)
+                except Exception:
+                    pass
+
+    def _on_test_error(self, error, error_string=""):
+        logger.warning(f"[settings] Test audio error occurred: {error} ({error_string})")
+        if hasattr(self, '_test_watchdog') and self._test_watchdog:
+            self._test_watchdog.stop()
+        self._reset_test_voice_btn()
 
 
 
@@ -1567,23 +1684,33 @@ class SettingsDialog(QDialog):
         self.comp_info.setPlainText(ctx.interview.important_info)
         
 
+    def _cleanup_audio(self):
+        if hasattr(self, '_test_player') and self._test_player:
+            try:
+                self._test_player.stop()
+            except Exception:
+                pass
+        if hasattr(self, '_test_watchdog') and self._test_watchdog:
+            try:
+                self._test_watchdog.stop()
+            except Exception:
+                pass
+
     def _save_settings_geometry(self):
-        from dotenv import set_key
-        geo = self.geometry()
-        set_key(self.env_path, "UI_SETTINGS_WIN_X", str(geo.x()))
-        set_key(self.env_path, "UI_SETTINGS_WIN_Y", str(geo.y()))
-        set_key(self.env_path, "UI_SETTINGS_WIN_W", str(geo.width()))
-        set_key(self.env_path, "UI_SETTINGS_WIN_H", str(geo.height()))
+        self._qsettings.setValue("settings_geometry", self.saveGeometry())
 
     def closeEvent(self, event):
+        self._cleanup_audio()
         self._save_settings_geometry()
         super().closeEvent(event)
 
     def accept(self):
+        self._cleanup_audio()
         self._save_settings_geometry()
         super().accept()
 
     def reject(self):
+        self._cleanup_audio()
         self._save_settings_geometry()
         super().reject()
 
@@ -1708,18 +1835,6 @@ class SettingsDialog(QDialog):
         self.snip_hotkey_input = self._create_hk_input(getattr(self.config, 'ui_snip_hotkey', 'ctrl+shift+p'))
         form.addRow("Snip Mode Hotkey:", self.snip_hotkey_input)
         
-        for i in range(1, 4):
-            hk = getattr(self.config, f'ui_quick_prompt_{i}_hotkey', f'ctrl+shift+{i}')
-            txt = getattr(self.config, f'ui_quick_prompt_{i}_text', '')
-            
-            hk_input = self._create_hk_input(hk)
-            setattr(self, f'qp{i}_hotkey_input', hk_input)
-            form.addRow(f"Prompt {i} Hotkey:", hk_input)
-            
-            txt_input = QLineEdit(txt)
-            setattr(self, f'qp{i}_text_input', txt_input)
-            form.addRow(f"Prompt {i} Text:", txt_input)
-            
         other_hk_layout.addLayout(form)
         inner_layout.addWidget(other_hk_frame)
         
@@ -1754,39 +1869,6 @@ class SettingsDialog(QDialog):
         layout.addWidget(scroll)
         self.pages.addWidget(page)
 
-    def _sync_active_model_combo(self):
-        self.active_model_combo.clear()
-        for le in self.model_inputs:
-            if le.text().strip():
-                self.active_model_combo.addItem(le.text().strip())
-
-    def _sync_active_vision_model_combo(self):
-        self.active_vision_model_combo.clear()
-        for le in self.vision_model_inputs:
-            if le.text().strip():
-                self.active_vision_model_combo.addItem(le.text().strip())
-
-    def toggle_key_visibility(self):
-        if hasattr(self, 'btn_show_key') and self.btn_show_key.isChecked():
-            self.key_input.setEchoMode(QLineEdit.EchoMode.Normal)
-            self.btn_show_key.setText("Hide Key")
-        else:
-            self.key_input.setEchoMode(QLineEdit.EchoMode.Password)
-            self.btn_show_key.setText("Show Key")
-
-    def toggle_premium_key_visibility(self):
-        if hasattr(self, 'btn_show_premium_key') and self.btn_show_premium_key.isChecked():
-            self.premium_key_input.setEchoMode(QLineEdit.EchoMode.Normal)
-            self.btn_show_premium_key.setText("Hide Key")
-        else:
-            self.premium_key_input.setEchoMode(QLineEdit.EchoMode.Password)
-            self.btn_show_premium_key.setText("Show Key")
-
-    def _validate_premium(self):
-        QMessageBox.information(self, "Validation", "Premium API Key validation skipped in offline mode.")
-
-
-
     def save_settings(self):
         self.save_current_profile_fields()
         # Window
@@ -1817,6 +1899,8 @@ class SettingsDialog(QDialog):
         set_key(self.env_path, "UI_REMEMBER_POSITION", str(self.chk_pos.isChecked()))
         set_key(self.env_path, "MUTE_USER_MIC", str(self.btn_mute_mic.isChecked()))
         set_key(self.env_path, "MUTE_SYSTEM_AUDIO", str(self.btn_mute_sys.isChecked()))
+        os.environ["MUTE_USER_MIC"] = str(self.btn_mute_mic.isChecked())
+        os.environ["MUTE_SYSTEM_AUDIO"] = str(self.btn_mute_sys.isChecked())
         if hasattr(self, 'you_heading_color'):
             set_key(self.env_path, "UI_YOU_HEADING_COLOR", self.you_heading_color)
         if hasattr(self, 'interviewer_heading_color'):
@@ -1845,6 +1929,13 @@ class SettingsDialog(QDialog):
         if hasattr(self, 'mute_mic_hotkey_input'): set_key(self.env_path, "UI_MUTE_MIC_HOTKEY", self.mute_mic_hotkey_input.text().strip())
         if hasattr(self, 'mute_sys_hotkey_input'): set_key(self.env_path, "UI_MUTE_SYS_HOTKEY", self.mute_sys_hotkey_input.text().strip())
         if hasattr(self, 'cycle_mode_hotkey_input'): set_key(self.env_path, "UI_CYCLE_MODE_HOTKEY", self.cycle_mode_hotkey_input.text().strip())
+        if hasattr(self, 'auto_answer_hotkey_input'): set_key(self.env_path, "UI_AUTO_ANSWER_HOTKEY", self.auto_answer_hotkey_input.text().strip())
+        if hasattr(self, 'manual_answer_hotkey_input'): set_key(self.env_path, "UI_MANUAL_ANSWER_HOTKEY", self.manual_answer_hotkey_input.text().strip())
+        if hasattr(self, 'chk_auto_answer'):
+            val = str(self.chk_auto_answer.isChecked())
+            set_key(self.env_path, "UI_AUTO_ANSWER", val)
+            os.environ["UI_AUTO_ANSWER"] = val
+            self.config.ui_auto_answer = self.chk_auto_answer.isChecked()
 
         # Audio page additions
         if hasattr(self, 'user_device_combo'):
@@ -1881,8 +1972,9 @@ class SettingsDialog(QDialog):
         if hasattr(self, 'groq_api_input'):
             set_key(self.env_path, "GROQ_API_KEY", self.groq_api_input.text().strip())
 
-        if hasattr(self, 'chk_tts_muted'):
+        if hasattr(self, 'btn_tts_muted'):
             set_key(self.env_path, "UI_TTS_MUTED", str(self.btn_tts_muted.isChecked()))
+            os.environ["UI_TTS_MUTED"] = str(self.btn_tts_muted.isChecked())
 
         import subprocess
         import sys
@@ -2032,16 +2124,78 @@ class SettingsDialog(QDialog):
     def setup_updates_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+
+        is_dark = self.theme.get('bg', '#1E1E1E') == '#1E1E1E'
+        card_bg = "#252526" if is_dark else "#FFFFFF"
+        border_col = "#383838" if is_dark else "#E2E8F0"
+        text_primary = "#FFFFFF" if is_dark else "#0F172A"
+        text_secondary = "#94A3B8" if is_dark else "#475569"
+        accent = "#0078D7" if is_dark else "#0055A4"
+
         from app.core.version import APP_VERSION
-        layout.addWidget(QLabel(f"<h2>Current Version: {APP_VERSION}</h2>"))
-        
+
+        # Header Card: Current Installed Version
+        header_card = QFrame()
+        header_card.setStyleSheet(f"QFrame {{ background-color: {card_bg}; border: 1px solid {border_col}; border-radius: 8px; }}")
+        h_layout = QHBoxLayout(header_card)
+        h_layout.setContentsMargins(15, 12, 15, 12)
+
+        v_lbl = QLabel(f"<span style='font-size: 14px; font-weight: bold; color: {text_primary};'>Current Installed Version:</span> <span style='font-size: 15px; color: {accent}; font-weight: bold;'>v{APP_VERSION}</span>")
+        v_lbl.setStyleSheet("border: none; background: transparent;")
+        h_layout.addWidget(v_lbl)
+        h_layout.addStretch()
+
+        status_badge = QLabel("Active Release")
+        status_badge.setStyleSheet(f"background-color: {'#166534' if is_dark else '#DCFCE7'}; color: {'#4ADE80' if is_dark else '#15803D'}; font-weight: bold; font-size: 11px; padding: 4px 10px; border-radius: 10px; border: none;")
+        h_layout.addWidget(status_badge)
+
+        layout.addWidget(header_card)
+
+        # Release Notes / What's New Container
+        layout.addWidget(_make_section_header("What's New in This Release", self.theme))
+
+        notes_scroll = QScrollArea()
+        notes_scroll.setWidgetResizable(True)
+        notes_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
+        notes_widget = QWidget()
+        notes_layout = QVBoxLayout(notes_widget)
+        notes_layout.setContentsMargins(16, 16, 16, 16)
+        notes_widget.setStyleSheet(f"QWidget {{ background-color: {card_bg}; border: 1px solid {border_col}; border-radius: 8px; }}")
+
+        self.lbl_release_notes = QLabel(
+            f"<div style='line-height: 1.6; font-size: 13px; color: {text_primary};'>"
+            f"<b style='font-size: 14px; color: {accent};'>Version {APP_VERSION} Highlights & Improvements:</b><br><br>"
+            "• <b>Push-to-Answer & Auto-Answer Toggle:</b> Switch seamlessly between instant automatic answering (<code>⚡ Auto</code>) and manual push-to-answer (<code>⏸️ Manual</code>) with <code>Ctrl+Shift+U</code>.<br><br>"
+            "• <b>Interview Question Distillation Engine:</b> In Manual Mode (<code>Ctrl+Enter</code>), Voro automatically filters out conversational chit-chat, greetings, and filler conversation from multiple turns of speech to distill and answer the real technical question directly.<br><br>"
+            "• <b>Full-Duplex Speech & Instant Interruptibility:</b> Microphone capture remains active while Voro speaks, instantly halting TTS speech when you begin talking.<br><br>"
+            "• <b>Hard Audio Muting & Queue Purging:</b> Immediately purges pending audio buffers and resets voice detection engines the moment user mic or system audio is muted.<br><br>"
+            "• <b>Light & Dark Theme Visual Overhaul:</b> Complete high-contrast visual refresh across all message boxes, alert dialogs, and popups.<br><br>"
+            "• <b>Voice Output Experimental Advisory:</b> Clear warning banners and device compatibility notices before activating Voro Voice.<br><br>"
+            "• <b>Performance Optimizations:</b> Faster startup routines, resilient local SAPI fallback, and robust error recovery.<br>"
+            "</div>"
+        )
+        self.lbl_release_notes.setWordWrap(True)
+        self.lbl_release_notes.setStyleSheet("border: none; background: transparent;")
+        notes_layout.addWidget(self.lbl_release_notes)
+        notes_scroll.setWidget(notes_widget)
+        layout.addWidget(notes_scroll)
+
+        # Bottom section: Check for Updates button
+        layout.addSpacing(10)
         self.btn_check_update = QPushButton("Check for Updates")
         self.btn_check_update.setCursor(Qt.PointingHandCursor)
+        self.btn_check_update.setStyleSheet(f"QPushButton {{ background-color: {accent}; color: white; border: none; padding: 10px 20px; font-weight: bold; border-radius: 6px; font-size: 13px; }} QPushButton:hover {{ background-color: {'#0066CC' if is_dark else '#004080'}; }}")
         self.btn_check_update.clicked.connect(self._check_for_updates)
         layout.addWidget(self.btn_check_update)
-        layout.addStretch()
-        
+
+        self.lbl_update_status = QLabel("")
+        self.lbl_update_status.setAlignment(Qt.AlignCenter)
+        self.lbl_update_status.setStyleSheet(f"color: {text_secondary}; font-size: 12px; border: none;")
+        layout.addWidget(self.lbl_update_status)
+
         self.pages.addWidget(page)
 
     def setup_help_page(self):
@@ -2059,103 +2213,361 @@ class SettingsDialog(QDialog):
         content_layout.setSpacing(15)
         
         content_layout.addWidget(QLabel("<h2>Help Center</h2>"))
+
+        is_dark = self.theme.get('bg', '#1E1E1E') == '#1E1E1E'
+        card_bg = "#252526" if is_dark else "#FFFFFF"
+        border_col = "#383838" if is_dark else "#E2E8F0"
+        text_primary = "#FFFFFF" if is_dark else "#0F172A"
+        text_secondary = "#94A3B8" if is_dark else "#475569"
+        accent = "#0078D7" if is_dark else "#0055A4"
+        accent_hover = "#0066CC" if is_dark else "#004080"
         
-        # --- Dropdown 1: Setup ---
-        box_setup = CollapsibleBox("🚀 How to Use the App (Setup Guide)")
-        lbl_setup = QLabel(
-            "<b>Step 1 — Lightning-Fast Voice (Groq API)</b><br>"
-            "To get the fastest possible voice response times (under 200ms), we recommend setting up Groq. Go to <b>console.groq.com</b>, create a free API key, and paste it into the <b>Groq API Key</b> field in the <b>Audio</b> settings tab.<br><br>"
-            "<b>Step 2 — Offline Voice Fallback (STT)</b><br>"
-            "If your internet drops or Groq is unavailable, Voro will instantly fall back to a local offline voice model. To set this up, go to the <b>Audio</b> tab, click 'Browse' to set an STT Models Directory (e.g., inside your Voro folder), and then click 'Save & Restart'. It will download the fallback model automatically.<br><br>"
-            "<i>Note: Voro's Brain and Screen Vision systems are entirely fully-managed. You don't need to configure anything else to get started!</i>"
+        kbd_bg = "#2D3748" if is_dark else "#E2E8F0"
+        kbd_fg = "#F8FAFC" if is_dark else "#0F172A"
+        kbd_border = "#4A5568" if is_dark else "#CBD5E1"
+        def _kbd(keys):
+            return " + ".join([f"<kbd style='background-color: {kbd_bg}; color: {kbd_fg}; border: 1px solid {kbd_border}; border-radius: 4px; padding: 2px 7px; font-family: Consolas, monospace; font-size: 12px; font-weight: bold;'>{k.strip()}</kbd>" for k in keys.split("+")])
+
+        # --- Dropdown 1: Setup Guide ---
+        self.box_setup = CollapsibleBox("🚀 Quick Setup Guide (First-Time Setup)", parent=self, is_dark=is_dark)
+
+        # Check Ollama installed status
+        import shutil
+        ollama_installed = False
+        if shutil.which("ollama"):
+            ollama_installed = True
+        else:
+            local_app_data = os.environ.get('LOCALAPPDATA', '')
+            prog_files = os.environ.get('ProgramFiles', 'C:\\Program Files')
+            if (os.path.exists(os.path.join(local_app_data, 'Programs', 'Ollama', 'ollama.exe')) or
+                os.path.exists(os.path.join(prog_files, 'Ollama', 'ollama.exe'))):
+                ollama_installed = True
+
+        groq_key = (getattr(self.config, 'groq_api_key', '') or os.environ.get("GROQ_API_KEY", "")).strip()
+        groq_configured = bool(groq_key and len(groq_key) > 10)
+
+        # Step 1 Frame: Ollama
+        step1_frame = QFrame()
+        step1_frame.setStyleSheet(f"QFrame {{ background-color: {card_bg}; border: 1px solid {border_col}; border-radius: 6px; }}")
+        s1_layout = QVBoxLayout(step1_frame)
+        s1_layout.setContentsMargins(12, 12, 12, 12)
+        s1_layout.setSpacing(8)
+
+        s1_title = QLabel(f"<b style='font-size: 13px; color: {text_primary};'>Step 1 — Download & Install Ollama (AI Brain)</b>")
+        s1_title.setStyleSheet("border: none; background: transparent;")
+        s1_layout.addWidget(s1_title)
+
+        s1_desc = QLabel(
+            f"<div style='line-height: 1.6; font-size: 12px; color: {text_secondary};'>"
+            "Ollama powers Voro's AI intelligence with high speed and zero cloud data leaks.<br><br>"
+            "<b>Step-by-step instructions:</b><br>"
+            "1. Click the button below to download the official installer (<code>OllamaSetup.exe</code>).<br>"
+            "2. Run the installer and finish installing Ollama on your PC.<br>"
+            "3. Open the Ollama application once from your Start Menu (you can log in or skip).<br>"
+            "4. Close or minimize Ollama (it continues running quietly in your Windows taskbar tray).<br>"
+            "5. Voro will automatically connect to your local Ollama AI engine!"
+            "</div>"
         )
-        lbl_setup.setWordWrap(True)
-        lbl_setup.setStyleSheet(f"color: {self.theme.get('base_text', '#E8E8E8')}; line-height: 1.4;")
-        box_setup.addWidget(lbl_setup)
-        content_layout.addWidget(box_setup)
-        
-        # --- Dropdown 2: Help ---
-        box_help = CollapsibleBox("📖 Voro Controls & Features")
-        lbl_help = QLabel(
-            "<b>Hotkeys:</b><br>"
-            "<i>(You can change all these hotkeys to whatever you like in the 'Interface' settings tab)</i><br><br>"
-            f"• <code>{self.config.ui_global_hotkey}</code> : Wake Voro up and start talking.<br>"
-            f"• <code>{self.config.ui_hint_hotkey}</code> : Toggle Hint Mode (Answers appear subtly in the text box instead of being spoken).<br>"
-            f"• <code>{self.config.ui_snip_hotkey}</code> : Toggle Snip Mode (Select exactly what part of the screen Voro sees).<br>"
-            f"• <code>{self.config.ui_stealth_hotkey}</code> : Toggle Stealth Mode (Completely hides Voro from Zoom/Teams screenshares and screenshots).<br>"
-            f"• <code>{self.config.ui_stop_hotkey}</code> : Stop Voro's current action or speech.<br>"
-            f"• <code>{self.config.ui_clear_session_hotkey}</code> : Clear Session (Make Voro forget the conversation).<br>"
-            f"• <code>{self.config.ui_mute_mic_hotkey}</code> : Mute User Mic.<br>"
-            f"• <code>{self.config.ui_mute_sys_hotkey}</code> : Mute System Audio capture.<br>"
-            f"• <code>{self.config.ui_tts_mute_hotkey}</code> : Mute Voro's Voice.<br>"
-            f"• <code>{self.config.ui_taskbar_hotkey}</code> : Toggle Taskbar visibility.<br>"
-            f"• <code>{self.config.ui_toggle_tray_hotkey}</code> : Toggle System Tray icon.<br>"
-            f"• <code>{self.config.ui_cycle_mode_hotkey}</code> : Cycle Voro Interface Mode.<br>"
-            f"• <code>{self.config.ui_quick_prompt_1_hotkey}</code> / <code>2</code> / <code>3</code> : Trigger Quick Prompts.<br><br>"
-            "<b>Tips:</b><br>"
-            "Use the <b>Occupancy</b> slider on Voro's main bar to adjust transparency. You can pull it down to make Voro nearly invisible during an interview!"
+        s1_desc.setWordWrap(True)
+        s1_desc.setStyleSheet("border: none; background: transparent;")
+        s1_layout.addWidget(s1_desc)
+
+        self.btn_s1 = QPushButton()
+        self.btn_s1.setCursor(Qt.PointingHandCursor)
+        self.btn_s1.setFixedWidth(280)
+        if ollama_installed:
+            self.btn_s1.setText("✅ Step 1 Completed (Ollama Installed)")
+            self.btn_s1.setStyleSheet(f"QPushButton {{ background-color: {'#166534' if is_dark else '#DCFCE7'}; color: {'#4ADE80' if is_dark else '#15803D'}; border: 1px solid {'#22C55E' if is_dark else '#86EFAC'}; padding: 8px 16px; border-radius: 5px; font-weight: bold; font-size: 12px; }} QPushButton:hover {{ background-color: {'#15803D' if is_dark else '#BBF7D0'}; }}")
+        else:
+            self.btn_s1.setText("📥 Step 1 — Download Ollama (Windows)")
+            self.btn_s1.setStyleSheet(f"QPushButton {{ background-color: {accent}; color: white; border: none; padding: 8px 16px; border-radius: 5px; font-weight: bold; font-size: 12px; }} QPushButton:hover {{ background-color: {accent_hover}; }}")
+        self.btn_s1.clicked.connect(self._open_setup_browser)
+        s1_layout.addWidget(self.btn_s1)
+
+        self.box_setup.addWidget(step1_frame)
+
+        # Step 2 Frame: Groq API Key
+        step2_frame = QFrame()
+        step2_frame.setStyleSheet(f"QFrame {{ background-color: {card_bg}; border: 1px solid {border_col}; border-radius: 6px; }}")
+        s2_layout = QVBoxLayout(step2_frame)
+        s2_layout.setContentsMargins(12, 12, 12, 12)
+        s2_layout.setSpacing(8)
+
+        s2_title = QLabel(f"<b style='font-size: 13px; color: {text_primary};'>Step 2 — Get Free Groq API Key (Ultra-Fast Speech Recognition)</b>")
+        s2_title.setStyleSheet("border: none; background: transparent;")
+        s2_layout.addWidget(s2_title)
+
+        s2_desc = QLabel(
+            f"<div style='line-height: 1.6; font-size: 12px; color: {text_secondary};'>"
+            "To get near-instant voice transcription (200ms) for interviews, you dont need to pay Groq.<br><br>"
+            "<b>Step-by-step instructions:</b><br>"
+            "1. Click the button below to open the official Groq Console website.<br>"
+            "2. Sign up or log in (100% free with your Google or GitHub account).<br>"
+            "3. Click <b>'Create API Key'</b>.<br>"
+            "4. Set the key name to <b>VORO</b> and expiration to <b>No Expiration</b>.<br>"
+            "5. Copy your generated key (starts with <code>gsk_...</code>).<br>"
+            "6. In Voro, go to the <b>Audio</b> settings tab, paste it into the <b>Groq API Key</b> field, and click <b>Save & Restart</b>!"
+            "</div>"
         )
-        lbl_help.setWordWrap(True)
-        lbl_help.setStyleSheet(f"color: {self.theme.get('base_text', '#E8E8E8')}; line-height: 1.4;")
-        box_help.addWidget(lbl_help)
+        s2_desc.setWordWrap(True)
+        s2_desc.setStyleSheet("border: none; background: transparent;")
+        s2_layout.addWidget(s2_desc)
+
+        self.btn_s2 = QPushButton()
+        self.btn_s2.setCursor(Qt.PointingHandCursor)
+        self.btn_s2.setFixedWidth(280)
+        if groq_configured:
+            self.btn_s2.setText("✅ Step 2 Completed (Groq Key Active)")
+            self.btn_s2.setStyleSheet(f"QPushButton {{ background-color: {'#166534' if is_dark else '#DCFCE7'}; color: {'#4ADE80' if is_dark else '#15803D'}; border: 1px solid {'#22C55E' if is_dark else '#86EFAC'}; padding: 8px 16px; border-radius: 5px; font-weight: bold; font-size: 12px; }} QPushButton:hover {{ background-color: {'#15803D' if is_dark else '#BBF7D0'}; }}")
+        else:
+            self.btn_s2.setText("⚡ Step 2 — Get Free Groq API Key")
+            self.btn_s2.setStyleSheet(f"QPushButton {{ background-color: {'#16A34A' if is_dark else '#15803D'}; color: white; border: none; padding: 8px 16px; border-radius: 5px; font-weight: bold; font-size: 12px; }} QPushButton:hover {{ background-color: {'#15803D' if is_dark else '#166534'}; }}")
+        self.btn_s2.clicked.connect(self._open_groq_console)
+        s2_layout.addWidget(self.btn_s2)
+
+        self.box_setup.addWidget(step2_frame)
+
+        # Optional Offline STT Note
+        s3_note = QLabel(
+            "<b>Optional — Offline Voice Fallback:</b><br>"
+            "If your internet drops during a call, Voro can fall back to a local offline Whisper model. "
+            "Go to the <b>Audio</b> tab and click 'Download STT Model' to store it permanently on your device.<br><br>"
+            "<i>Note: Voro's Brain and Screen Vision systems are entirely managed. Once Steps 1 & 2 are complete, you are 100% interview-ready!</i>"
+        )
+        s3_note.setWordWrap(True)
+        s3_note.setStyleSheet(f"font-size: 12px; color: {text_secondary}; line-height: 1.4; padding: 4px;")
+        self.box_setup.addWidget(s3_note)
+
+        content_layout.addWidget(self.box_setup)
+
+        # --- Dropdown 2: Controls & Shortcuts ---
+        box_help = CollapsibleBox("⌨️ Voro Controls & Shortcut Keys", parent=self, is_dark=is_dark)
+
+        hk_global = self.config.ui_global_hotkey
+        hk_hint = self.config.ui_hint_hotkey
+        hk_snip = self.config.ui_snip_hotkey
+        hk_stealth = self.config.ui_stealth_hotkey
+        hk_stop = self.config.ui_stop_hotkey
+        hk_clear = self.config.ui_clear_session_hotkey
+        hk_mute_mic = self.config.ui_mute_mic_hotkey
+        hk_mute_sys = self.config.ui_mute_sys_hotkey
+        hk_mute_tts = self.config.ui_tts_mute_hotkey
+        hk_taskbar = self.config.ui_taskbar_hotkey
+        hk_tray = self.config.ui_toggle_tray_hotkey
+        hk_cycle = self.config.ui_cycle_mode_hotkey
+        hk_auto_ans = getattr(self.config, 'ui_auto_answer_hotkey', 'ctrl+shift+u')
+        hk_manual_ans = getattr(self.config, 'ui_manual_answer_hotkey', 'ctrl+enter')
+        hk_max = getattr(self.config, 'ui_maximize_hotkey', 'F11')
+        hk_qp1 = self.config.ui_quick_prompt_1_hotkey
+        hk_qp2 = self.config.ui_quick_prompt_2_hotkey
+        hk_qp3 = self.config.ui_quick_prompt_3_hotkey
+
+        lbl_shortcuts = QLabel(
+            f"<div style='line-height: 1.8; font-size: 13px; color: {text_primary};'>"
+            "<i>(All hotkeys are fully customizable in the <b>Interface</b> settings tab)</i><br><br>"
+            f"<b style='font-size: 14px; color: {accent};'>1. Answering & Live Modes:</b><br>"
+            f"• {_kbd(hk_auto_ans)} : <b>Toggle Auto/Manual Answer Mode</b> (Switch between <code>⚡ Auto</code> and <code>⏸️ Manual</code>)<br>"
+            f"• {_kbd(hk_manual_ans)} : <b>Trigger Manual Answer</b> (Instantly distill recent conversation & answer core question)<br>"
+            f"• {_kbd(hk_global)} : <b>Global Summon</b> (Wake Voro up and start listening)<br>"
+            f"• {_kbd(hk_hint)} : <b>Toggle Hint Mode</b> (Answers appear silently in the text box without voice)<br>"
+            f"• {_kbd(hk_snip)} : <b>Toggle Snip Mode</b> (Drag and select screen area for OCR & coding prompts)<br>"
+            f"• {_kbd(hk_qp1)} / {_kbd(hk_qp2)} / {_kbd(hk_qp3)} : <b>Quick Prompts 1, 2, 3</b> (Solve screen question, explain code, summarize)<br><br>"
+            f"<b style='font-size: 14px; color: {accent};'>2. Audio & Privacy Controls:</b><br>"
+            f"• {_kbd(hk_stealth)} : <b>Toggle Stealth Mode</b> (100% invisible to Zoom, Teams, Meet, OBS screenshares & screenshots)<br>"
+            f"• {_kbd(hk_mute_mic)} : <b>Mute User Microphone</b> (Hard mute your mic input)<br>"
+            f"• {_kbd(hk_mute_sys)} : <b>Mute System Audio Capture</b> (Hard mute interviewer voice capture)<br>"
+            f"• {_kbd(hk_mute_tts)} : <b>Mute Voro Voice</b> (Mute AI spoken speech output)<br><br>"
+            f"<b style='font-size: 14px; color: {accent};'>3. Session & Window Controls:</b><br>"
+            f"• {_kbd(hk_stop)} : <b>Stop Current Task</b> (Instantly halts AI generation and voice playback)<br>"
+            f"• {_kbd(hk_clear)} : <b>Clear Session</b> (Wipe conversation memory for a fresh topic)<br>"
+            f"• {_kbd(hk_taskbar)} : <b>Toggle Taskbar Visibility</b> (Hide or show Voro in Windows taskbar)<br>"
+            f"• {_kbd(hk_tray)} : <b>Toggle System Tray Icon</b> (Show or hide tray icon)<br>"
+            f"• {_kbd(hk_cycle)} : <b>Cycle Interface Mode</b> (Switch between Standard, Compact, and Minimal views)<br>"
+            f"• {_kbd(hk_max)} : <b>Maximize / Restore Window</b><br><br>"
+            "<b>💡 Pro Tip — Occupancy Slider:</b><br>"
+            "Use the <b>Occupancy</b> slider on Voro's main top bar to adjust transparency. You can slide it down to make Voro nearly transparent and completely discreet during an interview!"
+            "</div>"
+        )
+        lbl_shortcuts.setWordWrap(True)
+        lbl_shortcuts.setStyleSheet("border: none; background: transparent;")
+        box_help.addWidget(lbl_shortcuts)
         content_layout.addWidget(box_help)
-        
-        # --- Dropdown 3: Support ---
-        box_support = CollapsibleBox("🛠️ Support & Logs")
-        
+
+        # --- Dropdown 3: Complete User Manual & Feature Guide (NEW) ---
+        box_manual = CollapsibleBox("📘 Complete User Manual & Feature Guide", parent=self, is_dark=is_dark)
+
+        # Real Interview Best Practices Callout Card
+        rules_frame = QFrame()
+        rules_bg = "#2D2206" if is_dark else "#FFF8E1"
+        rules_border = "#B27B00" if is_dark else "#FFE082"
+        rules_text = "#FFE082" if is_dark else "#8C5400"
+        rules_frame.setStyleSheet(f"QFrame {{ background-color: {rules_bg}; border: 1px solid {rules_border}; border-radius: 6px; padding: 10px; }}")
+        rf_layout = QVBoxLayout(rules_frame)
+        rf_layout.setContentsMargins(10, 8, 10, 8)
+        rf_layout.setSpacing(6)
+
+        rf_title = QLabel("<b>🌟 Real Interview Golden Rules (Must-Know Settings):</b>")
+        rf_title.setStyleSheet(f"font-size: 13px; color: {rules_text}; font-weight: bold; border: none; background: transparent;")
+        rf_layout.addWidget(rf_title)
+
+        rf_text = QLabel(
+            "• <b>Rule 1: Keep System Audio Capture ON (🎧 Green)</b> — This allows Voro to hear what the interviewer is asking through your headphones/speakers.<br>"
+            "• <b>Rule 2: Keep Vision System Enabled</b> — When doing LeetCode, system design, or reviewing slides, Vision ensures Voro reads the code or problem directly.<br>"
+            "• <b>Rule 3: Use Manual Mode (Ctrl+Enter)</b> — If the interviewer pauses frequently or engages in small talk, switch to <code>⏸️ Manual</code> mode so Voro only answers when you trigger it.<br>"
+            "• <b>Rule 4: Turn Stealth Mode ON (Ctrl+Shift+G)</b> — Always enable Stealth Mode before sharing your screen so Voro remains 100% invisible to the interviewer."
+        )
+        rf_text.setWordWrap(True)
+        rf_text.setStyleSheet(f"font-size: 12px; color: {rules_text}; line-height: 1.5; border: none; background: transparent;")
+        rf_layout.addWidget(rf_text)
+        box_manual.addWidget(rules_frame)
+
+        # 100% Unlimited & Privacy Guarantee Banner
+        priv_frame = QFrame()
+        priv_bg = "#0D2818" if is_dark else "#F0FDF4"
+        priv_border = "#166534" if is_dark else "#BBF7D0"
+        priv_text = "#4ADE80" if is_dark else "#166534"
+        priv_frame.setStyleSheet(f"QFrame {{ background-color: {priv_bg}; border: 1px solid {priv_border}; border-radius: 6px; padding: 10px; }}")
+        pf_layout = QVBoxLayout(priv_frame)
+        pf_layout.setContentsMargins(10, 8, 10, 8)
+        pf_layout.setSpacing(6)
+
+        pf_title = QLabel("<b>🛡️ 100% Free, Unlimited & Zero-Data-Logging Guarantee:</b>")
+        pf_title.setStyleSheet(f"font-size: 13px; color: {priv_text}; font-weight: bold; border: none; background: transparent;")
+        pf_layout.addWidget(pf_title)
+
+        pf_text = QLabel(
+            "• <b>No Hidden Fees / 100% Unlimited:</b> Once activated with your license key, Voro is completely yours. There are no monthly fees, no credit limits, and no question caps.<br>"
+            "• <b>100% Local Privacy:</b> Norvi Agency NEVER records, stores, or transmits your audio, screen captures, resumes, or interview questions to any Norvi servers. Everything runs strictly locally on your machine and private endpoints."
+        )
+        pf_text.setWordWrap(True)
+        pf_text.setStyleSheet(f"font-size: 12px; color: {priv_text}; line-height: 1.5; border: none; background: transparent;")
+        pf_layout.addWidget(pf_text)
+        box_manual.addWidget(priv_frame)
+
+        # Deep Feature Explanations
+        manual_details = QLabel(
+            f"<div style='line-height: 1.7; font-size: 13px; color: {text_primary};'>"
+            f"<b style='font-size: 14px; color: {accent};'>1. AI Personality & Tone Selection:</b><br>"
+            "Customize the exact answering style to match the interview format (in <b>Settings ➔ General</b>):<br>"
+            "• <i>Conversational (Script):</i> Natural spoken interview style; sounds like you are speaking live.<br>"
+            "• <i>Conversational (Hinglish):</i> Natural bilingual tech interview tone; seamlessly blends English tech concepts with conversational flow.<br>"
+            "• <i>Direct & Technical:</i> Concise bullet points, architectural trade-offs, and clean code blocks.<br>"
+            "• <i>Supportive & Encouraging:</i> Calm, structured, step-by-step guidance for complex algorithmic challenges.<br><br>"
+            f"<b style='font-size: 14px; color: {accent};'>2. Offline STT Model vs Groq STT:</b><br>"
+            "• <b>Online Groq STT (Recommended):</b> Runs Whisper in under 200 milliseconds in the cloud. Essential for live conversational pacing.<br>"
+            "• <b>Offline Faster-Whisper:</b> Runs 100% locally on your computer's CPU/GPU. Zero internet required; ideal as a robust offline fallback.<br><br>"
+            f"<b style='font-size: 14px; color: {accent};'>3. Stealth Mode (Zero Detection Architecture):</b><br>"
+            "Uses Windows native <code>SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)</code> to make Voro completely invisible to Zoom, Microsoft Teams, Google Meet, OBS Studio, Discord, Slack, and screenshot utilities. It also removes Voro from the Windows Task Manager Applications list.<br><br>"
+            f"<b style='font-size: 14px; color: {accent};'>4. Vision System & Snip Mode:</b><br>"
+            "Real-time screen analysis with high-accuracy stealth OCR. Automatically reads code editors, LeetCode / HackerRank problems, architectural diagrams, and browser tabs. Snip Mode (<code>Ctrl+Shift+P</code>) allows pinpoint region selection.<br><br>"
+            f"<b style='font-size: 14px; color: {accent};'>5. Dual-Channel Audio Subsystem & Diarization:</b><br>"
+            "Processes your microphone and system loopback audio separately. Intelligent diarization tags each speaker automatically: <code>[Interviewer]</code> vs <code>[You]</code>, ensuring the AI always knows who is asking.<br><br>"
+            f"<b style='font-size: 14px; color: {accent};'>6. Candidate Resume Profile & Target Company Context:</b><br>"
+            "• <b>Profile Tab:</b> Paste or import your resume so Voro tailors answers to your real career accomplishments, projects, and tech stack.<br>"
+            "• <b>Company Tab:</b> Add company details and role requirements so answers reflect their specific engineering culture and values.<br><br>"
+            f"<b style='font-size: 14px; color: {accent};'>7. Auto-Answer vs Push-to-Answer Mode:</b><br>"
+            "• <b>Auto Mode (<code>⚡ Auto</code>):</b> Voro answers automatically as soon as the interviewer pauses.<br>"
+            "• <b>Manual Mode (<code>⏸️ Manual</code>):</b> Voro listens and transcribes silently in the background. Press <code>Ctrl+Enter</code> or click <code>Answer ↵</code> when you want an answer; Voro automatically filters out conversational small talk and answers the real technical question.<br>"
+            "</div>"
+        )
+        manual_details.setWordWrap(True)
+        manual_details.setStyleSheet("border: none; background: transparent; padding-top: 5px;")
+        box_manual.addWidget(manual_details)
+        content_layout.addWidget(box_manual)
+
+        # --- Dropdown 4: Support & Logs ---
+        box_support = CollapsibleBox("🛠️ Support & Logs", parent=self, is_dark=is_dark)
+
+        support_link_col = "#38BDF8" if is_dark else "#0055A4"
         support_lbl = QLabel(
-            "If you encounter issues or crashes with Voro, you can check your system logs or copy them to report a bug to our engineering team.<br><br>"
-            "<b>Contact Norvi Agency Support:</b><br>"
-            "Website: <a href='https://nor-vi.in/contact/' style='color:#0055A4; text-decoration:none;'>https://nor-vi.in/contact/</a><br>"
+            f"<div style='line-height: 1.6; font-size: 13px; color: {text_primary};'>"
+            "If you encounter any issues, need setup guidance, or have questions, our dedicated engineering team is here to assist you.<br><br>"
+            f"<b>📱 Official WhatsApp Support:</b> <a href='https://wa.me/919893534314?text=Hello%20Norvi%20Support%2C%20I%20need%20help%20with%20Voro' style='color:{support_link_col}; text-decoration:none; font-weight:bold;'>+91 9893534314</a><br>"
+            f"<b>🌐 Website Support:</b> <a href='https://nor-vi.in/contact/' style='color:{support_link_col}; text-decoration:none;'>https://nor-vi.in/contact/</a><br>"
+            "</div>"
         )
         support_lbl.setWordWrap(True)
         support_lbl.setOpenExternalLinks(True)
-        support_lbl.setStyleSheet(f"color: {self.theme.get('base_text', '#E8E8E8')}; line-height: 1.4;")
+        support_lbl.setStyleSheet("border: none; background: transparent;")
         box_support.addWidget(support_lbl)
-        
+
+        # WhatsApp Direct Action Button
+        btn_wa = QPushButton("💬 Chat on WhatsApp (+91 9893534314)")
+        btn_wa.setCursor(Qt.PointingHandCursor)
+        btn_wa.setStyleSheet("QPushButton { background-color: #25D366; color: white; border: none; padding: 9px 18px; border-radius: 6px; font-weight: bold; font-size: 13px; } QPushButton:hover { background-color: #1EBE5D; }")
+        btn_wa.clicked.connect(self._open_whatsapp_support)
+        box_support.addWidget(btn_wa)
+
+        box_support.addWidget(QLabel("<b style='font-size: 12px; color: #888;'>Diagnostics & Troubleshooting Logs:</b>"))
+
         btn_layout = QHBoxLayout()
         self.btn_open_logs = QPushButton("Open Log Folder")
         self.btn_open_logs.setCursor(Qt.PointingHandCursor)
         self.btn_open_logs.clicked.connect(self._open_log_folder)
         btn_layout.addWidget(self.btn_open_logs)
-        
+
         self.btn_copy_logs = QPushButton("Copy Logs to Clipboard")
         self.btn_copy_logs.setCursor(Qt.PointingHandCursor)
         self.btn_copy_logs.clicked.connect(self._copy_logs)
         btn_layout.addWidget(self.btn_copy_logs)
         btn_layout.addStretch()
-        
+
         box_support.addLayout(btn_layout)
         content_layout.addWidget(box_support)
-        
+
         content_layout.addStretch()
         scroll_area.setWidget(content_widget)
         layout.addWidget(scroll_area)
-        
+
         self.pages.addWidget(page)
-        
+
+    def _open_groq_console(self):
+        import webbrowser
+        webbrowser.open("https://console.groq.com/keys")
+
+    def _open_whatsapp_support(self):
+        import webbrowser
+        webbrowser.open("https://wa.me/919893534314?text=Hello%20Norvi%20Support%2C%20I%20need%20help%20with%20Voro")
+
     def _open_log_folder(self):
-        import os, subprocess
-        log_dir = os.path.join(os.getcwd(), "logs")
+        import os
+        appdata = os.getenv("APPDATA", os.path.expanduser("~"))
+        log_dir = os.path.join(appdata, "Norvi", "Voro", "logs")
         os.makedirs(log_dir, exist_ok=True)
         os.startfile(log_dir)
-        
+
     def _check_for_updates(self):
-        self.btn_check_update.setText("Checking...")
+        self.btn_check_update.setText("Checking for updates...")
         self.btn_check_update.setEnabled(False)
+        self.lbl_update_status.setText("Connecting to GitHub release server...")
         from app.core.updater import Updater
         self._temp_updater = Updater()
         self._temp_updater.update_available.connect(self._on_update_found)
         self._temp_updater.no_update.connect(self._on_no_update)
         self._temp_updater.check_error.connect(self._on_update_error)
         self._temp_updater.check_for_updates()
-        
+
     def _on_update_found(self, version, notes, url):
         self.btn_check_update.setText("Check for Updates")
         self.btn_check_update.setEnabled(True)
+        self.lbl_update_status.setText(f"Update available: v{version}")
+        if notes and notes.strip():
+            self.lbl_release_notes.setText(
+                f"<div style='line-height: 1.6; font-size: 13px;'>"
+                f"<b style='font-size: 14px; color: #0078D7;'>New Version {version} Available:</b><br><br>"
+                f"{notes.replace(chr(10), '<br>')}"
+                f"</div>"
+            )
         from PySide6.QtWidgets import QMessageBox
-        reply = QMessageBox.question(self, "Update Voro", f"Version {version} is available!\n\nRelease Notes:\n{notes}\n\nDo you want to download and install it now?", QMessageBox.Yes | QMessageBox.No)
-        if reply == QMessageBox.Yes:
+        from app.ui.theme import style_message_box
+        box = QMessageBox(self)
+        style_message_box(box, theme_mode=getattr(self.config, 'ui_theme_mode', 'system'), parent=self)
+        box.setIcon(QMessageBox.Icon.Question)
+        box.setWindowTitle("Update Voro")
+        box.setText(f"<b>Version {version} is available!</b><br><br><b>Release Notes:</b><br>{notes}<br><br>Do you want to download and install it now?")
+        box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        reply = box.exec() if not os.environ.get("PYTEST_CURRENT_TEST") else QMessageBox.StandardButton.No
+        if reply == QMessageBox.StandardButton.Yes:
             self.btn_check_update.setText("Downloading...")
             self.btn_check_update.setEnabled(False)
             self._temp_updater.download_progress.connect(lambda p: self.btn_check_update.setText(f"D/L: {p}%"))
@@ -2165,14 +2577,32 @@ class SettingsDialog(QDialog):
     def _on_no_update(self):
         self.btn_check_update.setText("Check for Updates")
         self.btn_check_update.setEnabled(True)
+        self.lbl_update_status.setText("✓ You are running the latest version of Voro.")
         from PySide6.QtWidgets import QMessageBox
-        QMessageBox.information(self, "Up to date", "You are running the latest version of Voro.")
-        
+        from app.ui.theme import style_message_box
+        box = QMessageBox(self)
+        style_message_box(box, theme_mode=getattr(self.config, 'ui_theme_mode', 'system'), parent=self)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle("Up to Date")
+        box.setText("<b>You are running the latest version of Voro.</b>")
+        box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        if not os.environ.get("PYTEST_CURRENT_TEST"):
+            box.exec()
+
     def _on_update_error(self, err):
         self.btn_check_update.setText("Check for Updates")
         self.btn_check_update.setEnabled(True)
+        self.lbl_update_status.setText(f"Check failed: {err}")
         from PySide6.QtWidgets import QMessageBox
-        QMessageBox.warning(self, "Update Failed", f"Could not check for updates: {err}")
+        from app.ui.theme import style_message_box
+        box = QMessageBox(self)
+        style_message_box(box, theme_mode=getattr(self.config, 'ui_theme_mode', 'system'), parent=self)
+        box.setIcon(QMessageBox.Icon.Warning)
+        box.setWindowTitle("Update Failed")
+        box.setText(f"<b>Could not check for updates:</b><br><br>{err}")
+        box.setStandardButtons(QMessageBox.StandardButton.Ok)
+        if not os.environ.get("PYTEST_CURRENT_TEST"):
+            box.exec()
 
 
     
@@ -2255,6 +2685,7 @@ class SettingsDialog(QDialog):
             QMessageBox.warning(self, "No Logs", "No log file found yet.")
 
     def setup_norvi_page(self):
+        import json, base64, shutil, time as _time
         page = QWidget()
         layout = QVBoxLayout(page)
         
@@ -2265,15 +2696,77 @@ class SettingsDialog(QDialog):
         inner = QWidget()
         inner_layout = QVBoxLayout(inner)
         
-        inner_layout.addWidget(QLabel("<h2>Norvi Agent Credentials</h2>"))
+        header_row = QHBoxLayout()
+        logo_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "norvi_logo.png"))
+        if not os.path.exists(logo_path):
+            try:
+                import sys
+                logo_path = os.path.join(sys._MEIPASS, "norvi_logo.png")
+            except Exception:
+                pass
+        if os.path.exists(logo_path):
+            from PySide6.QtGui import QPixmap
+            logo_pix = QPixmap(logo_path)
+            if not logo_pix.isNull():
+                h_logo = QLabel()
+                h_logo.setPixmap(logo_pix.scaled(28, 28, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                header_row.addWidget(h_logo)
+        header_title = QLabel("<h2>Norvi Agent Credentials</h2>")
+        header_row.addWidget(header_title)
+        header_row.addStretch()
+        inner_layout.addLayout(header_row)
         
-        import json, os, base64, time as _time
+        is_dark = self.theme.get('bg', '#1E1E1E') == '#1E1E1E'
+        text_secondary = "#94A3B8" if is_dark else "#475569"
+        accent = "#0078D7" if is_dark else "#0055A4"
+        accent_hover = "#0066CC" if is_dark else "#004080"
+
+        # --- First time setup (Ollama & Groq Setup Guidance) ---
+        setup_lbl = QLabel("First-Time Setup: Go to <b>Help ➔ Quick Setup Guide</b> to complete Step 1 (Ollama AI Brain) and Step 2 (Groq Speech Key).")
+        setup_lbl.setWordWrap(True)
+        setup_lbl.setStyleSheet(f"color: {text_secondary}; font-size: 12px; margin-top: 10px; line-height: 1.4;")
+        inner_layout.addWidget(setup_lbl)
+        
+        self.btn_setup = QPushButton("Setup")
+        self.btn_setup.setCursor(Qt.PointingHandCursor)
+        self.btn_setup.setFixedWidth(260)
+        
+        # Check if Ollama is already installed
+        ollama_installed = False
+        if shutil.which("ollama"):
+            ollama_installed = True
+        else:
+            local_app_data = os.environ.get('LOCALAPPDATA', '')
+            prog_files = os.environ.get('ProgramFiles', 'C:\\Program Files')
+            if (os.path.exists(os.path.join(local_app_data, 'Programs', 'Ollama', 'ollama.exe')) or
+                os.path.exists(os.path.join(prog_files, 'Ollama', 'ollama.exe'))):
+                ollama_installed = True
+
+        groq_key = (getattr(self.config, 'groq_api_key', '') or os.environ.get("GROQ_API_KEY", "")).strip()
+        groq_configured = bool(groq_key and len(groq_key) > 10)
+                
+        if ollama_installed and groq_configured:
+            self.btn_setup.setText("✅ Setup Completed")
+            self.btn_setup.setEnabled(False)
+            self.btn_setup.setStyleSheet(f"QPushButton {{ background-color: {'#166534' if is_dark else '#DCFCE7'}; color: {'#4ADE80' if is_dark else '#15803D'}; border: 1px solid {'#22C55E' if is_dark else '#86EFAC'}; border-radius: 5px; font-weight: bold; font-size: 12px; padding: 7px 14px; }}")
+        elif ollama_installed and not groq_configured:
+            self.btn_setup.setText("⚠️ Step 1 Done — Finish Step 2")
+            self.btn_setup.setStyleSheet(f"QPushButton {{ background-color: {'#B45309' if is_dark else '#FEF3C7'}; color: {'#FCD34D' if is_dark else '#92400E'}; border: 1px solid {'#F59E0B' if is_dark else '#FCD34D'}; border-radius: 5px; font-weight: bold; font-size: 12px; padding: 7px 14px; }} QPushButton:hover {{ background-color: {'#92400E' if is_dark else '#FDE68A'}; }}")
+            self.btn_setup.clicked.connect(self._navigate_to_setup)
+        else:
+            self.btn_setup.setText("🚀 Start Setup (Help ➔ Setup)")
+            self.btn_setup.setStyleSheet(f"QPushButton {{ background-color: {accent}; color: white; border: none; border-radius: 5px; font-weight: bold; font-size: 12px; padding: 7px 14px; }} QPushButton:hover {{ background-color: {accent_hover}; }}")
+            self.btn_setup.clicked.connect(self._navigate_to_setup)
+            
+        inner_layout.addWidget(self.btn_setup)
+        
+        inner_layout.addSpacing(20)
+        
         lease_file = os.path.join(os.path.expanduser("~"), ".norvi_voro_lease")
         
         license_id = ""
         device_id = ""
         product = ""
-        expires_str = ""
         status = "Not Activated"
         
         if os.path.exists(lease_file):
@@ -2282,6 +2775,7 @@ class SettingsDialog(QDialog):
                     data = json.load(f)
                 token = data.get("token", "")
                 expires_at = data.get("expires_at", 0)
+                plan_expires_at = data.get("plan_expires_at")
                 if token:
                     parts = token.split(".")
                     if len(parts) >= 2:
@@ -2291,10 +2785,21 @@ class SettingsDialog(QDialog):
                         license_id = decoded.get("license_id", "")
                         device_id = decoded.get("device_id", "")
                         product = decoded.get("product", "voro").capitalize()
-                if expires_at:
-                    import datetime
-                    exp_dt = datetime.datetime.fromtimestamp(expires_at)
-                    expires_str = exp_dt.strftime("%d %b %Y, %I:%M %p")
+
+                import datetime
+                if plan_expires_at:
+                    if isinstance(plan_expires_at, (int, float)):
+                        status = "Active" if _time.time() < plan_expires_at else "Expired"
+                    elif isinstance(plan_expires_at, str):
+                        try:
+                            clean_iso = plan_expires_at.replace("Z", "+00:00")
+                            exp_dt = datetime.datetime.fromisoformat(clean_iso).astimezone()
+                            status = "Active" if _time.time() < exp_dt.timestamp() else "Expired"
+                        except Exception:
+                            status = "Active"
+                elif plan_expires_at is None and ("plan_expires_at" in data or license_id):
+                    status = "Active"
+                elif expires_at:
                     status = "Active" if _time.time() < expires_at else "Expired"
             except Exception as e:
                 status = f"Error: {e}"
@@ -2305,18 +2810,22 @@ class SettingsDialog(QDialog):
         form.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
         form.setVerticalSpacing(12)
         
+        is_dark = self.theme.get('bg', '#1E1E1E') == '#1E1E1E'
+        ro_bg = "#252525" if is_dark else "#FFFFFF"
+        ro_fg = "#E0E0E0" if is_dark else "#1A1A1A"
+        ro_border = "#444444" if is_dark else "#D0D0D0"
+
         def _ro_field(val):
             f = QLineEdit()
             f.setText(val)
             f.setReadOnly(True)
-            f.setStyleSheet("background: #1a1a1a; color: #aaaaaa;")
+            f.setStyleSheet(f"background: {ro_bg}; color: {ro_fg}; border: 1px solid {ro_border}; border-radius: 4px; padding: 4px 8px;")
             return f
         
         form.addRow("Status:", _ro_field(status))
         form.addRow("Product:", _ro_field(product or "Voro"))
         form.addRow("License ID:", _ro_field(license_id or "Not found"))
         form.addRow("Device ID:", _ro_field(device_id or "Not found"))
-        form.addRow("Expires:", _ro_field(expires_str or "Unknown"))
         
         inner_layout.addLayout(form)
         inner_layout.addStretch()

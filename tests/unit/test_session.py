@@ -31,13 +31,13 @@ def test_context_limits():
     manager = SessionManager(max_turns=2)
     
     manager.add_user_turn("1")
+    manager.add_assistant_turn("A1")
     manager.add_user_turn("2")
-    manager.add_user_turn("3")
     
     context = manager.get_context()
     assert len(context) == 2
-    assert context[0].text == "2"
-    assert context[1].text == "3"
+    assert context[0].text == "A1"
+    assert context[1].text == "2"
 
 def test_reset_session():
     manager = SessionManager()

@@ -11,7 +11,8 @@
         
         import os
         from dotenv import set_key
-        env_path = os.path.join(os.getcwd(), ".env")
+        from app.core.config import get_env_path
+        env_path = get_env_path()
         set_key(env_path, "ACTIVATION_MODE", next_mode)
         
         self.reload_ai_provider()
@@ -89,3 +90,4 @@
             ai_coding_provider=ai_coding_provider,
             ai_vision_provider=ai_vision_provider
         )
+

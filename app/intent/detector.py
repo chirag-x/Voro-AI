@@ -9,8 +9,16 @@ class IntentDetector:
             "reset session", "clear session", "clear conversation",
             "clear memory", "clear chat", "wipe memory", "forget everything",
             "new session", "fresh start",
-            "sleep", "wake up",
-            "exit voro", "exit", "quit", "close voro", "close application", "shut down"
+            "sleep", "wake up"
+        ]
+        
+        # Explicit exit commands must strictly match to prevent killing Voro on developer questions
+        # like "How do we exit a loop?" or "I don't want to quit my job"
+        self.exit_commands = [
+            r"^exit(\s+voro)?$",
+            r"^quit(\s+voro)?$",
+            r"^close\s+(voro|application)$",
+            r"^shut\s*down$"
         ]
         
         self.question_words = {
@@ -26,7 +34,17 @@ class IntentDetector:
         # Remove punctuation for matching
         clean_text = re.sub(r'[^\w\s]', '', normalized)
         
-        # 1. Command detection — substring match so variations like "clear session" all hit
+        # 1. Exit command detection — strict anchored match
+        for pattern in self.exit_commands:
+            if re.match(pattern, clean_text):
+                return IntentResult(
+                    intent=Intent.COMMAND,
+                    confidence=1.0,
+                    source=IntentSource.RULE,
+                    normalized_text=normalized
+                )
+        
+        # 2. General command detection — substring match for session controls
         for phrase in self.command_phrases:
             if phrase in clean_text:
                 return IntentResult(

@@ -36,8 +36,8 @@ class VadEngine:
         self.num_padding_frames = int(self.padding_duration_ms / self.frame_duration_ms)
         self.ring_buffer = collections.deque(maxlen=self.num_padding_frames)
         
-        # How much silence before we cut off the speech (prevents stuttering and breathing hallucinations)
-        self.silence_duration_ms = 800 # 1.2 seconds
+        # How much silence before we cut off the speech (optimized for low latency)
+        self.silence_duration_ms = 450 # 450ms low latency
         self.num_silence_frames = int(self.silence_duration_ms / self.frame_duration_ms)
         self.silence_counter = 0
         

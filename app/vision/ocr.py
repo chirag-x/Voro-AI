@@ -15,6 +15,8 @@ def _configure_tesseract():
         if not _tesseract_configured:
             try:
                 import pytesseract
+                import pytesseract.pytesseract as pt
+                import subprocess
                 from app.core.config import load_config
                 config = load_config()
                 
@@ -24,10 +26,23 @@ def _configure_tesseract():
                 else:
                     pytesseract.pytesseract.tesseract_cmd = config.tesseract_path
                     
+                # Stealth Monkeypatch: Force subprocess.CREATE_NO_WINDOW
+                # to prevent millisecond CMD prompt flash during screen capture/screen-share
+                _orig_subprocess_args = pt.subprocess_args
+                def _stealth_subprocess_args(include_stdout=True):
+                    kwargs = _orig_subprocess_args(include_stdout)
+                    if hasattr(subprocess, 'CREATE_NO_WINDOW'):
+                        kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+                    return kwargs
+                pt.subprocess_args = _stealth_subprocess_args
+
                 _tesseract_configured = True
-                logger.info(f"Initialized PyTesseract on CPU (path: {pytesseract.pytesseract.tesseract_cmd})")
+                logger.info(f"Initialized PyTesseract on CPU (path: {pytesseract.pytesseract.tesseract_cmd}) with stealth subprocess flags")
             except Exception as e:
                 logger.error(f"Failed to configure Tesseract: {e}")
+
+# Immediately configure on module import
+_configure_tesseract()
 
 class OCREngine:
     def __init__(self):

@@ -24,6 +24,7 @@ class MockWhisperModel:
 
 def test_stt_transcribe(monkeypatch):
     monkeypatch.setattr("app.speech.stt.WhisperModel", MockWhisperModel)
+    monkeypatch.setattr("os.path.exists", lambda p: True)
     
     stt = SpeechToText(model_size="tiny.en")
     stt.initialize()

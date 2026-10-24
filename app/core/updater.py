@@ -57,7 +57,12 @@ class Updater(QObject):
         threading.Thread(target=_check, daemon=True).start()
 
     def _is_newer(self, remote: str, local: str) -> bool:
-        def parse(v): return tuple(map(int, v.strip('v').split('.')))
+        import re
+        def parse(v):
+            m = re.search(r'(\d+)\.(\d+)\.(\d+)', str(v))
+            if m:
+                return tuple(map(int, m.groups()))
+            return (0, 0, 0)
         try:
             return parse(remote) > parse(local)
         except Exception:

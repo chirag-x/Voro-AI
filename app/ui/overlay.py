@@ -1,6 +1,7 @@
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PySide6.QtCore import QUrl
 import os
+from app.utils.logging import logger
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLabel, QPushButton, QSystemTrayIcon, QMenu, QApplication, QSlider
 from PySide6.QtCore import Qt, QObject, Signal, QTimer
 from PySide6.QtGui import QIcon
@@ -26,9 +27,12 @@ class UIBridge(QObject):
     config_updated = Signal()
     tts_audio_ready = Signal(str)
     tts_stop = Signal()
+    auto_answer_toggled = Signal()
+    manual_answer_requested = Signal()
 
     model_switched = Signal(str)
     profile_updated = Signal()
+    voice_updated = Signal(str)
     toggle_visibility = Signal()
     trigger_snip = Signal()
     toggle_taskbar = Signal()
@@ -43,17 +47,21 @@ class OverlayWindow(QWidget):
     user_mic_toggled = Signal()
     sys_mic_toggled = Signal()
     tts_toggled = Signal()
+    auto_answer_toggled = Signal()
+    manual_answer_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         
         self.setWindowTitle("Voro")
+        self._stealth_active = False
         
         from app.core.config import load_config
         from app.ui.theme import get_theme_colors
         self.config = load_config()
         self.theme = get_theme_colors(self.config.ui_theme_mode)
-        self._env_path = os.path.join(os.getcwd(), ".env")
+        from app.core.config import get_env_path
+        self._env_path = get_env_path()
         
         # --- Feature 2: Always-on-top state ---
         self._always_on_top = self.config.ui_always_on_top
@@ -67,15 +75,17 @@ class OverlayWindow(QWidget):
             self.setWindowIcon(QIcon(icon_path))
         
         # --- Feature 3: Window geometry memory ---
-        if self.config.ui_remember_position and self.config.ui_win_x != -1:
-            self.setGeometry(
-                self.config.ui_win_x,
-                self.config.ui_win_y,
-                self.config.ui_win_w,
-                self.config.ui_win_h
-            )
+        from PySide6.QtCore import QSettings
+        self._qsettings = QSettings("Norvi", "Voro")
+        geom = self._qsettings.value("overlay_geometry")
+        
+        if self.config.ui_remember_position and geom:
+            self.restoreGeometry(geom)
         else:
-            self.resize(self.config.ui_win_w, self.config.ui_win_h)
+            if self.config.ui_remember_position and self.config.ui_win_x != -1:
+                self.setGeometry(self.config.ui_win_x, self.config.ui_win_y, self.config.ui_win_w, self.config.ui_win_h)
+            else:
+                self.resize(self.config.ui_win_w, self.config.ui_win_h)
         # Apply Master Opacity
         self.setWindowOpacity(self.config.ui_opacity / 100.0)
         
@@ -87,6 +97,12 @@ class OverlayWindow(QWidget):
         bg_col_main   = self.theme['bg']
         accent        = "#0055A4"
         
+        msg_bg = "#1E1E1E" if is_dark_mode else "#FFFFFF"
+        msg_fg = "#E2E8F0" if is_dark_mode else "#1E293B"
+        btn_accent = "#0078D7" if is_dark_mode else "#0055A4"
+        btn_hover = "#0066CC" if is_dark_mode else "#004080"
+        btn_border = "#3B82F6" if is_dark_mode else "#0055A4"
+
         self.setStyleSheet(
             f"QWidget {{ font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif; color: {text_col}; }}"
             f"OverlayWindow {{ background-color: {bg_col_main}; border-radius: 12px; border: 1px solid {border_col}; }}"
@@ -94,6 +110,10 @@ class OverlayWindow(QWidget):
             f"QPushButton#settings_btn {{ background-color: {btn_panel_bg}; color: {text_col}; border: 1px solid {border_col}; border-radius: 6px; padding: 4px 10px; font-weight: bold; }}"
             f"QPushButton#settings_btn:hover {{ border: 1px solid {accent}; }}"
             f"QTextEdit {{ background-color: transparent; border: none; color: {text_col}; }}"
+            f"QMessageBox {{ background-color: {msg_bg}; color: {msg_fg}; }}"
+            f"QMessageBox QLabel {{ color: {msg_fg}; font-size: 13px; background-color: transparent; }}"
+            f"QMessageBox QPushButton {{ background-color: {btn_accent}; color: #FFFFFF; border: 1px solid {btn_border}; border-radius: 6px; padding: 7px 24px; font-weight: bold; font-size: 13px; min-width: 75px; }}"
+            f"QMessageBox QPushButton:hover {{ background-color: {btn_hover}; }}"
         )
         
         self.layout = QVBoxLayout(self)
@@ -114,17 +134,23 @@ class OverlayWindow(QWidget):
         self.ind_user_mic = QPushButton()
         self.ind_sys_mic = QPushButton()
         self.ind_voice = QPushButton()
+        self.btn_auto_answer = QPushButton()
+        self.btn_manual_answer = QPushButton("Answer ↵")
         
         # Connect clicks to signals
         # Use proper methods to prevent lambda garbage collection in PySide6
         self.ind_user_mic.clicked.connect(self._emit_user_mic)
         self.ind_sys_mic.clicked.connect(self._emit_sys_mic)
         self.ind_voice.clicked.connect(self._emit_voice)
+        self.btn_auto_answer.clicked.connect(self._emit_auto_answer)
+        self.btn_manual_answer.clicked.connect(self._emit_manual_answer)
         
         # Remove button borders and hover states by making cursor pointing hand
         self.ind_user_mic.setCursor(Qt.PointingHandCursor)
         self.ind_sys_mic.setCursor(Qt.PointingHandCursor)
         self.ind_voice.setCursor(Qt.PointingHandCursor)
+        self.btn_auto_answer.setCursor(Qt.PointingHandCursor)
+        self.btn_manual_answer.setCursor(Qt.PointingHandCursor)
         
         self.settings_btn = QPushButton("Settings")
         self.settings_btn.setObjectName("settings_btn")
@@ -181,6 +207,8 @@ class OverlayWindow(QWidget):
         toolbar_layout.addWidget(self.ind_user_mic)
         toolbar_layout.addWidget(self.ind_sys_mic)
         toolbar_layout.addWidget(self.ind_voice)
+        toolbar_layout.addWidget(self.btn_auto_answer)
+        toolbar_layout.addWidget(self.btn_manual_answer)
         
         self.update_btn = QPushButton("Update Available")
         self.update_btn.setObjectName("update_btn")
@@ -195,7 +223,9 @@ class OverlayWindow(QWidget):
         self.pin_btn = QPushButton("\U0001F4CC Pin" if not self._always_on_top else "\U0001F4CC Unpin")
         self.pin_btn.setFixedSize(65, 24)
         self.pin_btn.setCursor(Qt.PointingHandCursor)
-        self.pin_btn.setStyleSheet(f"QPushButton {{ background-color: transparent; border: 1px solid {self.theme.get('border', '#555')}; border-radius: 6px; font-weight: bold; color: {self.theme['base_text']}; }} QPushButton:hover {{ background-color: #333; }}")
+        is_dark_mode = self.theme.get('bg', '#1E1E1E') == '#1E1E1E'
+        pin_hover = "#333333" if is_dark_mode else "#E0E0E0"
+        self.pin_btn.setStyleSheet(f"QPushButton {{ background-color: transparent; border: 1px solid {self.theme.get('border', '#555')}; border-radius: 6px; font-weight: bold; color: {self.theme['base_text']}; }} QPushButton:hover {{ background-color: {pin_hover}; }}")
         self.pin_btn.clicked.connect(self.toggle_always_on_top)
         toolbar_layout.addWidget(self.pin_btn)
         
@@ -217,6 +247,7 @@ class OverlayWindow(QWidget):
             f"border: none;"
             f"padding: 10px;"
         )
+        self._update_document_css()
         
         self.layout.addLayout(toolbar_layout)
         self.layout.addWidget(self.status_label)
@@ -241,7 +272,7 @@ class OverlayWindow(QWidget):
         from PySide6.QtCore import QTimer
         QTimer.singleShot(2000, self._init_updater)
         
-        # --- Feature 4: Animated typing ---
+        # --- Feature 4: Animated typing & Streaming batcher ---
         self._history_html = ""
         self._typing_full_text = ""
         self._typing_current_text = ""
@@ -249,6 +280,16 @@ class OverlayWindow(QWidget):
         self._typing_timer = QTimer(self)
         self._typing_timer.setInterval(15)
         self._typing_timer.timeout.connect(self._typing_tick)
+        
+        self._streaming_current_text = ""
+        self._stream_dirty = False
+        self._auto_scroll_locked = True
+        self._programmatic_scroll = False
+        self._stream_render_timer = QTimer(self)
+        self._stream_render_timer.setInterval(40) # 25 FPS throttle to prevent UI freezing
+        self._stream_render_timer.timeout.connect(self._render_streaming_chunk)
+        
+        self.text_area.verticalScrollBar().valueChanged.connect(self._on_scroll_value_changed)
         
         # Init label
         self.update_activation_label(getattr(self.config, 'activation_mode', 'basic'))
@@ -269,19 +310,27 @@ class OverlayWindow(QWidget):
         self._apply_privacy_flag()
         self.tts_playlist = []
         self.audio_output = QAudioOutput(self)
-        
-        out_device_name = getattr(self.config, 'ui_tts_output_device', 'Default System Device')
-        if out_device_name != "Default System Device":
-            from PySide6.QtMultimedia import QMediaDevices
-            for dev in QMediaDevices.audioOutputs():
-                if dev.description() == out_device_name:
-                    self.audio_output.setDevice(dev)
-                    break
-                    
+        self._update_tts_audio_output()
         self.media_player = QMediaPlayer(self)
         self.media_player.setAudioOutput(self.audio_output)
         self.media_player.mediaStatusChanged.connect(self._on_media_status_changed)
         self.media_player.playbackStateChanged.connect(self._on_playback_state_changed)
+
+    def _update_tts_audio_output(self):
+        """Dynamically applies output audio device and volume to Overlay audio output."""
+        if not hasattr(self, 'audio_output') or not self.audio_output:
+            return
+        out_device_name = getattr(self.config, 'ui_tts_output_device', 'Default System Device')
+        from PySide6.QtMultimedia import QMediaDevices
+        if out_device_name == "Default System Device":
+            self.audio_output.setDevice(QMediaDevices.defaultAudioOutput())
+        else:
+            for dev in QMediaDevices.audioOutputs():
+                if dev.description() == out_device_name:
+                    self.audio_output.setDevice(dev)
+                    break
+        vol = getattr(self.config, 'ui_tts_volume', 100)
+        self.audio_output.setVolume(vol / 100.0)
 
     
     def toggle_maximize(self):
@@ -313,7 +362,7 @@ class OverlayWindow(QWidget):
         self.config.ui_opacity = value
         # Save securely to .env file for persistence
         from dotenv import set_key
-        env_path = os.path.join(os.getcwd(), ".env")
+        env_path = self._env_path
         set_key(env_path, "UI_OPACITY", str(value))
 
     def set_tray(self, tray):
@@ -338,7 +387,7 @@ class OverlayWindow(QWidget):
         # Save real-time change to env so Settings dialog stays in sync
         import os
         from dotenv import set_key
-        env_path = os.path.join(os.getcwd(), ".env")
+        env_path = self._env_path
         set_key(env_path, "UI_SHOW_IN_TASKBAR", str(self._show_in_taskbar))
         
         state = "SHOWN" if self._show_in_taskbar else "HIDDEN"
@@ -358,7 +407,7 @@ class OverlayWindow(QWidget):
             
         import os
         from dotenv import set_key
-        env_path = os.path.join(os.getcwd(), ".env")
+        env_path = self._env_path
         set_key(env_path, "UI_SHOW_TRAY", str(self._show_tray))
         
         state = "SHOWN" if self._show_tray else "HIDDEN"
@@ -387,7 +436,7 @@ class OverlayWindow(QWidget):
         self.setWindowFlags(flags)
         
         # Re-apply privacy flag because changing window flags can reset the window handle in PySide6
-        self._apply_privacy_flag()
+        self._apply_privacy_flag(stealth=getattr(self, '_stealth_active', True))
 
         
         if was_visible:
@@ -416,6 +465,12 @@ class OverlayWindow(QWidget):
     def _emit_voice(self, *args):
         self.tts_toggled.emit()
 
+    def _emit_auto_answer(self, *args):
+        self.auto_answer_toggled.emit()
+
+    def _emit_manual_answer(self, *args):
+        self.manual_answer_requested.emit()
+
     def open_settings(self):
         self.settings_btn.setText("Loading...")
         self.settings_btn.setEnabled(False)
@@ -423,22 +478,35 @@ class OverlayWindow(QWidget):
         QTimer.singleShot(50, self._open_settings_deferred)
         
     def _open_settings_deferred(self):
-        from app.context.manager import ContextManager
-        from app.ui.settings import SettingsDialog
-        cm = ContextManager()
-        dialog = SettingsDialog(cm, self)
-        
-
-        
-        self.settings_btn.setText("Settings")
-        self.settings_btn.setEnabled(True)
-        if dialog.exec():
-            if hasattr(self, 'bridge') and self.bridge:
-                self.bridge.profile_updated.emit()
+        try:
+            from app.context.manager import ContextManager
+            from app.ui.settings import SettingsDialog
+            cm = ContextManager()
+            dialog = SettingsDialog(cm, self)
+            
+            self.settings_btn.setText("Settings")
+            self.settings_btn.setEnabled(True)
+            if dialog.exec():
+                from app.core.config import load_config
+                self.config = load_config()
+                self._update_tts_audio_output()
+                self._update_indicators()
+                if hasattr(self, 'bridge') and self.bridge:
+                    self.bridge.profile_updated.emit()
+                    self.bridge.voice_updated.emit(self.config.ui_voice)
+                self._update_document_css()
+        except Exception as e:
+            logger.error(f"Error opening settings dialog: {e}", exc_info=True)
+            if hasattr(self, 'update_error'):
+                self.update_error(f"Failed to open settings: {e}")
+        finally:
+            self.settings_btn.setText("Settings")
+            self.settings_btn.setEnabled(True)
         
     def _update_indicators(self):
         from app.core.config import load_config
         self.config = load_config()
+        self._update_tts_audio_output()
         
         c_on = "#00E676"  # Bright subtle green
         c_off = "#FF5252" # Soft red
@@ -475,9 +543,29 @@ class OverlayWindow(QWidget):
         v_voice = not getattr(self.config, 'ui_tts_muted', False)
         self.ind_voice.setText("🔊" if v_voice else "🔈")
         
-        v_style = style_btn(v_voice).replace("margin-right: 4px;", "margin-right: 12px;")
+        v_style = style_btn(v_voice).replace("margin-right: 4px;", "margin-right: 8px;")
         self.ind_voice.setStyleSheet(v_style)
-        self.ind_voice.setToolTip("Voro Voice Output")
+        self.ind_voice.setToolTip("Voro Voice Output (In Development - Test before live interviews)")
+
+        auto_ans = getattr(self.config, 'ui_auto_answer', True)
+        self.btn_auto_answer.setText("⚡ Auto" if auto_ans else "⏸️ Manual")
+        auto_col = "#10B981" if auto_ans else "#F59E0B"
+        hk_auto = getattr(self.config, 'ui_auto_answer_hotkey', 'ctrl+shift+u')
+        hk_ans = getattr(self.config, 'ui_manual_answer_hotkey', 'ctrl+enter')
+        self.btn_auto_answer.setToolTip(f"Auto-Answer: {'ENABLED' if auto_ans else 'DISABLED (Manual)'}\nClick or press {hk_auto} to toggle.")
+        
+        auto_style = f"QPushButton {{ font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 10px; background-color: {bg_col}; margin-right: 4px; color: {auto_col}; border: 1px solid {auto_col}; }} QPushButton:hover {{ background-color: {auto_col}; color: {text_hover_col}; }}"
+        self.btn_auto_answer.setStyleSheet(auto_style)
+        
+        if not auto_ans:
+            ans_bg = "#0055A4" if not _is_dark else "#0078D7"
+            ans_hover = "#004080" if not _is_dark else "#0066CC"
+            ans_style = f"QPushButton {{ font-size: 11px; font-weight: bold; padding: 3px 10px; border-radius: 10px; background-color: {ans_bg}; color: white; border: none; margin-right: 8px; }} QPushButton:hover {{ background-color: {ans_hover}; }}"
+            self.btn_manual_answer.setStyleSheet(ans_style)
+            self.btn_manual_answer.setToolTip(f"Trigger AI Answer Now ({hk_ans})")
+            self.btn_manual_answer.setVisible(True)
+        else:
+            self.btn_manual_answer.setVisible(False)
 
     def update_activation_label(self, mode: str):
         self.activation_label.setText(' Norvi Agent ')
@@ -507,25 +595,104 @@ class OverlayWindow(QWidget):
         self._update_status_bar()
         
 
-    def _update_html_safe(self, html_content: str):
+    def _update_document_css(self):
+        fs = getattr(self.config, 'ui_font_size', 13)
+        is_dark_mode = self.theme.get('bg', '#1E1E1E') == '#1E1E1E'
+        body_text_col = "#F1F5F9" if is_dark_mode else "#1A1A1A"
+        
+        custom_heading_col = getattr(self.config, 'ui_voro_heading_color', None)
+        if is_dark_mode:
+            voro_heading_col = custom_heading_col if custom_heading_col and custom_heading_col != '#0055A4' else '#38BDF8'
+            strong_col = '#38BDF8'
+            code_bg = '#161722'
+            code_text_col = '#F8F8F2'
+            inline_code_bg = '#252836'
+            inline_code_col = '#E2E8F0'
+            style = 'monokai'
+        else:
+            voro_heading_col = custom_heading_col or '#0055A4'
+            strong_col = '#0055A4'
+            code_bg = '#F0F4F8'
+            code_text_col = '#1E293B'
+            inline_code_bg = '#E2E8F0'
+            inline_code_col = '#0F172A'
+            style = 'friendly'
+        
+        try:
+            from pygments.formatters import HtmlFormatter
+            pygments_css = HtmlFormatter(style=style).get_style_defs('.codehilite')
+        except Exception:
+            pygments_css = ""
+            
+        css = f"""
+            {pygments_css}
+            .codehilite {{
+                background-color: {code_bg};
+                color: {code_text_col};
+                padding: 10px 14px;
+                border-radius: 6px;
+                border: 1px solid {'#2A2E3D' if is_dark_mode else '#CBD5E1'};
+                font-family: 'Consolas', 'Cascadia Code', 'Fira Code', 'Courier New', monospace;
+                font-size: {fs-1}px;
+                line-height: 1.45;
+            }}
+            .codehilite pre {{
+                margin: 0;
+                color: {code_text_col};
+            }}
+            code {{
+                background-color: {inline_code_bg};
+                color: {inline_code_col};
+                padding: 2px 5px;
+                border-radius: 4px;
+                font-family: 'Consolas', 'Cascadia Code', monospace;
+                font-size: {fs-1}px;
+            }}
+            p {{ margin-top: 4px; margin-bottom: 4px; line-height: 1.5; }}
+            ul {{ margin-top: 4px; margin-bottom: 4px; padding-left: 20px; }}
+            h1, h2, h3, h4 {{ color: {voro_heading_col}; margin-top: 8px; margin-bottom: 4px; font-weight: 700; }}
+            strong {{ color: {strong_col}; font-weight: 700; }}
+            em {{ color: {body_text_col}; opacity: 0.9; }}
+        """
+        self.text_area.document().setDefaultStyleSheet(css)
+
+    def _on_scroll_value_changed(self, value):
+        if getattr(self, '_programmatic_scroll', False):
+            return
+        sb = self.text_area.verticalScrollBar()
+        if sb.maximum() == 0 or value >= sb.maximum() - 60:
+            self._auto_scroll_locked = True
+        elif value < sb.maximum() - 100:
+            self._auto_scroll_locked = False
+
+    def _update_html_safe(self, html_content: str, force_scroll: bool = False):
+        from PySide6.QtGui import QTextCursor
+
         scrollbar = self.text_area.verticalScrollBar()
-        # Consider it at bottom if within 15 pixels
-        was_at_bottom = scrollbar.value() >= scrollbar.maximum() - 15
         prev_value = scrollbar.value()
         
         self.text_area.setHtml(html_content)
         
-        if was_at_bottom:
-            scrollbar.setValue(scrollbar.maximum())
-        else:
-            scrollbar.setValue(prev_value)
+        self._programmatic_scroll = True
+        try:
+            if force_scroll or self._auto_scroll_locked:
+                scrollbar.setValue(scrollbar.maximum())
+                cursor = self.text_area.textCursor()
+                cursor.movePosition(QTextCursor.End)
+                self.text_area.setTextCursor(cursor)
+                self.text_area.ensureCursorVisible()
+            else:
+                scrollbar.setValue(prev_value)
+        finally:
+            self._programmatic_scroll = False
             
         if not self.isVisible():
             self.show()
 
     def _append_html(self, html: str):
         self._history_html += html
-        self._update_html_safe(self._history_html)
+        self._auto_scroll_locked = True
+        self._update_html_safe(self._history_html, force_scroll=True)
 
     def update_user_input(self, text: str):
         """Displays the STT transcript as a USER message."""
@@ -565,48 +732,59 @@ class OverlayWindow(QWidget):
     def update_answer(self, text: str):
         """Starts the typing animation for the AI response."""
         self._typing_timer.stop()
+        if hasattr(self, '_stream_render_timer'):
+            self._stream_render_timer.stop()
         self._typing_full_text = text
         self._typing_current_text = ""
         self._typing_index = 0
+        self._auto_scroll_locked = True
         self._typing_timer.start(15)
         self.update_processing_state("TYPING")
         
     def update_answer_chunk(self, chunk: str, is_first: bool = False, is_last: bool = False):
         if is_first:
             self._typing_timer.stop()
-            self._typing_current_text = chunk
+            if hasattr(self, '_stream_render_timer'):
+                self._stream_render_timer.stop()
+            self._streaming_current_text = chunk
+            self._stream_dirty = True
+            self._auto_scroll_locked = True
             self.update_processing_state("GENERATING")
-        else:
-            self._typing_current_text += chunk
-            
-        # color unused - body text now uses theme-aware body_text_col computed below
+            self._render_streaming_chunk(is_final=False)
+            if hasattr(self, '_stream_render_timer'):
+                self._stream_render_timer.start(40)
+            return
+
+        if chunk:
+            self._streaming_current_text += chunk
+            self._stream_dirty = True
+
+        if is_last:
+            if hasattr(self, '_stream_render_timer'):
+                self._stream_render_timer.stop()
+            self._render_streaming_chunk(is_final=True)
+            self.update_processing_state("IDLE")
+
+    def _render_streaming_chunk(self, is_final: bool = False):
+        if not self._stream_dirty and not is_final:
+            return
+        self._stream_dirty = False
+        
         fs = self.config.ui_font_size
         
         try:
             import markdown
-            from pygments.formatters import HtmlFormatter
-            md_html = markdown.markdown(self._typing_current_text, extensions=['fenced_code', 'codehilite'])
-            style = 'monokai' if self.config.ui_theme_mode == 'dark' else 'default'
-            css = HtmlFormatter(style=style).get_style_defs('.codehilite')
+            md_html = markdown.markdown(self._streaming_current_text, extensions=['fenced_code', 'codehilite'])
         except Exception:
-            md_html = self._typing_current_text.replace('\n', '<br>')
-            css = ""
+            md_html = self._streaming_current_text.replace('\n', '<br>')
             
-        voro_heading_col = getattr(self.config, 'ui_voro_heading_color', '#0055A4')
         is_dark_mode = self.theme.get('bg', '#1E1E1E') == '#1E1E1E'
-        body_text_col = "#F0F0F0" if is_dark_mode else "#1A1A1A"
-        code_bg = "#1A1B26" if is_dark_mode else "#F0F4F8"
+        custom_heading_col = getattr(self.config, 'ui_voro_heading_color', None)
+        voro_heading_col = (custom_heading_col if custom_heading_col and custom_heading_col != '#0055A4' else '#38BDF8') if is_dark_mode else (custom_heading_col or '#0055A4')
+        body_text_col = "#F1F5F9" if is_dark_mode else "#1A1A1A"
         
         final_html = f'''
         <div style="margin-bottom: 15px; border-left: 3px solid {voro_heading_col}; padding-left: 10px;">
-            <style>
-                {css}
-                .codehilite {{ background-color: {code_bg}; padding: 10px; border-radius: 6px; font-family: 'Consolas', 'Courier New', monospace; font-size: {fs-1}px; }}
-                p {{ margin-top: 4px; margin-bottom: 4px; line-height: 1.5; }}
-                ul {{ margin-top: 4px; margin-bottom: 4px; padding-left: 20px; }}
-                strong {{ color: {voro_heading_col}; }}
-                em {{ color: {body_text_col}; opacity: 0.85; }}
-            </style>
             <span style="color: {voro_heading_col}; font-weight: 700; font-size: {fs}px; text-transform: uppercase; letter-spacing: 1px;">Voro</span>
             <div style="color: {body_text_col}; font-size: {fs}px; margin-top: 2px;">
                 {md_html}
@@ -614,45 +792,32 @@ class OverlayWindow(QWidget):
         </div>
         '''
         
-        self._update_html_safe(self._history_html + final_html)
-            
-        if is_last:
+        if is_final:
             self._history_html += final_html
-            self.update_processing_state("IDLE")
+            self._update_html_safe(self._history_html, force_scroll=self._auto_scroll_locked)
+        else:
+            self._update_html_safe(self._history_html + final_html, force_scroll=self._auto_scroll_locked)
 
     def _typing_tick(self):
         chunk_size = max(1, len(self._typing_full_text) // 50) # dynamic speed
         self._typing_current_text += self._typing_full_text[self._typing_index : self._typing_index + chunk_size]
         self._typing_index += chunk_size
         
-        # color unused - body text now uses theme-aware body_text_col computed below
         fs = self.config.ui_font_size
         
         try:
             import markdown
-            from pygments.formatters import HtmlFormatter
             md_html = markdown.markdown(self._typing_current_text, extensions=['fenced_code', 'codehilite'])
-            style = 'monokai' if self.config.ui_theme_mode == 'dark' else 'default'
-            css = HtmlFormatter(style=style).get_style_defs('.codehilite')
         except Exception:
             md_html = self._typing_current_text.replace('\n', '<br>')
-            css = ""
             
-        voro_heading_col = getattr(self.config, 'ui_voro_heading_color', '#0055A4')
         is_dark_mode = self.theme.get('bg', '#1E1E1E') == '#1E1E1E'
-        body_text_col = "#F0F0F0" if is_dark_mode else "#1A1A1A"
-        code_bg = "#1A1B26" if is_dark_mode else "#F0F4F8"
+        custom_heading_col = getattr(self.config, 'ui_voro_heading_color', None)
+        voro_heading_col = (custom_heading_col if custom_heading_col and custom_heading_col != '#0055A4' else '#38BDF8') if is_dark_mode else (custom_heading_col or '#0055A4')
+        body_text_col = "#F1F5F9" if is_dark_mode else "#1A1A1A"
         
         final_html = f'''
         <div style="margin-bottom: 15px; border-left: 3px solid {voro_heading_col}; padding-left: 10px;">
-            <style>
-                {css}
-                .codehilite {{ background-color: {code_bg}; padding: 10px; border-radius: 6px; font-family: 'Consolas', 'Courier New', monospace; font-size: {fs-1}px; }}
-                p {{ margin-top: 4px; margin-bottom: 4px; line-height: 1.5; }}
-                ul {{ margin-top: 4px; margin-bottom: 4px; padding-left: 20px; }}
-                strong {{ color: {voro_heading_col}; }}
-                em {{ color: {body_text_col}; opacity: 0.85; }}
-            </style>
             <span style="color: {voro_heading_col}; font-weight: 700; font-size: {fs}px; text-transform: uppercase; letter-spacing: 1px;">Voro</span>
             <div style="color: {body_text_col}; font-size: {fs}px; margin-top: 2px;">
                 {md_html}
@@ -660,12 +825,13 @@ class OverlayWindow(QWidget):
         </div>
         '''
         
-        self._update_html_safe(self._history_html + final_html)
-            
         if self._typing_index >= len(self._typing_full_text):
             self._typing_timer.stop()
             self._history_html += final_html
+            self._update_html_safe(self._history_html, force_scroll=self._auto_scroll_locked)
             self.update_processing_state("IDLE")
+        else:
+            self._update_html_safe(self._history_html + final_html, force_scroll=self._auto_scroll_locked)
 
     def update_error(self, text: str):
         """Displays an error message."""
@@ -676,6 +842,11 @@ class OverlayWindow(QWidget):
 
     def clear(self):
         self._typing_timer.stop()
+        if hasattr(self, '_stream_render_timer'):
+            self._stream_render_timer.stop()
+        self._streaming_current_text = ""
+        self._stream_dirty = False
+        self._auto_scroll_locked = True
         self._history_html = ""
         self.text_area.setPlainText("")
 
@@ -686,6 +857,24 @@ class OverlayWindow(QWidget):
             if self.isMinimized():
                 self.hide()
         super().changeEvent(event)
+
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        self._sync_geometry()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._sync_geometry()
+
+    def _sync_geometry(self):
+        if getattr(self.config, 'ui_remember_position', True):
+            if hasattr(self, '_qsettings'):
+                self._qsettings.setValue("overlay_geometry", self.saveGeometry())
+            geom = self.geometry()
+            self.config.ui_win_x = geom.x()
+            self.config.ui_win_y = geom.y()
+            self.config.ui_win_w = geom.width()
+            self.config.ui_win_h = geom.height()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -700,14 +889,9 @@ class OverlayWindow(QWidget):
     # --- Feature 3: Save geometry on close ---
     def closeEvent(self, event):
         """Save window position and quit."""
-        from dotenv import set_key
         from PySide6.QtWidgets import QApplication
         if self.config.ui_remember_position:
-            geo = self.geometry()
-            set_key(self._env_path, "UI_WIN_X", str(geo.x()))
-            set_key(self._env_path, "UI_WIN_Y", str(geo.y()))
-            set_key(self._env_path, "UI_WIN_W", str(geo.width()))
-            set_key(self._env_path, "UI_WIN_H", str(geo.height()))
+            self._qsettings.setValue("overlay_geometry", self.saveGeometry())
         app = QApplication.instance()
         if app:
             app.quit()
@@ -721,17 +905,33 @@ class OverlayWindow(QWidget):
 
         
     def toggle_stealth_mode(self):
-        '''Toggle Stealth Mode: ON = ghost to screenshare/screenshot. OFF = fully normal visible app.'''
+        '''Toggle Stealth Mode: ON = ghost to screenshare/screenshot/taskbar/taskmanager. OFF = fully normal visible app.'''
         self._stealth_active = not getattr(self, '_stealth_active', False)
         
         from PySide6.QtWidgets import QApplication
         
         if self._stealth_active:
-            # Stealth ON: Invisible to screenshare/screenshot but user can still see Voro
+            # Stealth ON: Strip title so Task Manager drops Voro from "Apps" list
+            self.setWindowTitle("")
             self._apply_privacy_flag(stealth=True)
             for widget in QApplication.topLevelWidgets():
-                if widget != self:
+                if widget != self and widget.isVisible():
                     self._apply_privacy_flag(stealth=True, target_hwnd=int(widget.winId()))
+                    if hasattr(widget, 'setWindowTitle'):
+                        if not hasattr(widget, '_original_title'):
+                            widget._original_title = widget.windowTitle()
+                        widget.setWindowTitle("")
+                    import sys
+                    if sys.platform == "win32":
+                        try:
+                            import ctypes
+                            u32 = ctypes.windll.user32
+                            w_hwnd = int(widget.winId())
+                            w_ex = u32.GetWindowLongW(w_hwnd, -20)
+                            u32.SetWindowLongW(w_hwnd, -20, w_ex | 0x00000080)
+                            u32.SetWindowPos(w_hwnd, 0, 0, 0, 0, 0, 0x0027)
+                        except Exception:
+                            pass
                     
             # Also hide tray + taskbar for full invisibility
             self._show_tray = False
@@ -740,11 +940,26 @@ class OverlayWindow(QWidget):
             self._show_in_taskbar = False
             self._apply_taskbar_state()
         else:
-            # Stealth OFF: Fully normal visible app
+            # Stealth OFF: Restore normal title and visibility
+            self.setWindowTitle("Voro")
             self._apply_privacy_flag(stealth=False)
             for widget in QApplication.topLevelWidgets():
-                if widget != self:
+                if widget != self and widget.isVisible():
                     self._apply_privacy_flag(stealth=False, target_hwnd=int(widget.winId()))
+                    if hasattr(widget, 'setWindowTitle'):
+                        orig_title = getattr(widget, '_original_title', "Voro Settings")
+                        widget.setWindowTitle(orig_title)
+                    import sys
+                    if sys.platform == "win32":
+                        try:
+                            import ctypes
+                            u32 = ctypes.windll.user32
+                            w_hwnd = int(widget.winId())
+                            w_ex = u32.GetWindowLongW(w_hwnd, -20)
+                            u32.SetWindowLongW(w_hwnd, -20, w_ex & ~0x00000080)
+                            u32.SetWindowPos(w_hwnd, 0, 0, 0, 0, 0, 0x0027)
+                        except Exception:
+                            pass
                     
             self._show_tray = True
             if hasattr(self, 'tray_icon') and self.tray_icon:
@@ -792,6 +1007,16 @@ class OverlayWindow(QWidget):
         from PySide6.QtMultimedia import QMediaPlayer
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
             # Delete file after playing
+            source = self.media_player.source().toLocalFile()
+            import os
+            if source and os.path.exists(source):
+                try:
+                    os.remove(source)
+                except Exception:
+                    pass
+            self._play_next_tts()
+        elif status == QMediaPlayer.MediaStatus.InvalidMedia:
+            logger.warning("[overlay] InvalidMedia encountered during TTS playback. Skipping chunk.")
             source = self.media_player.source().toLocalFile()
             import os
             if source and os.path.exists(source):
@@ -880,7 +1105,8 @@ class OverlayWindow(QWidget):
         import sys, subprocess, os
         from dotenv import dotenv_values
         
-        env_path = os.path.join(os.getcwd(), ".env")
+        from app.core.config import get_env_path
+        env_path = get_env_path()
         new_env = os.environ.copy()
         if os.path.exists(env_path):
             new_env.update(dotenv_values(env_path))

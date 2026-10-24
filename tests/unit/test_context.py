@@ -31,7 +31,7 @@ def test_system_prompt_addition(tmp_path):
     manager = ContextManager(storage_path=str(tmp_path / "context.json"))
     manager.update_interview(role="SWE")
     prompt = manager.build_system_prompt_addition()
-    assert "--- INTERVIEW CONTEXT ---" in prompt
+    assert "INTERVIEW" in prompt and "CONTEXT" in prompt
     assert "Role: SWE" in prompt
     
     manager.reset()

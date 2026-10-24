@@ -1,6 +1,8 @@
-﻿[Setup]
+[Setup]
 AppName=Voro
-AppVersion=1.3.0
+AppVersion=1.3.8
+AppMutex=VoroAppMutex
+CloseApplications=yes
 DefaultDirName={pf}\Voro
 DefaultGroupName=Voro
 OutputDir=installer

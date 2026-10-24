@@ -33,25 +33,32 @@ class OllamaManager:
         return t
 
     def ensure_setup(self):
-        """Main flow: check if running, install if missing, pull model."""
+        """Main flow: check if running, start if stopped, pull model."""
         if not self.is_running():
             logger.info("[OllamaManager] Ollama is not responding on port 11434.")
             
             # Check if it's installed but just not running
-            local_app_data = os.environ.get('LOCALAPPDATA', '')
-            ollama_exe = os.path.join(local_app_data, 'Programs', 'Ollama', 'ollama.exe')
+            ollama_exe = shutil.which("ollama")
+            if not ollama_exe or not os.path.exists(ollama_exe):
+                local_app_data = os.environ.get('LOCALAPPDATA', '')
+                alt_path = os.path.join(local_app_data, 'Programs', 'Ollama', 'ollama.exe')
+                if os.path.exists(alt_path):
+                    ollama_exe = alt_path
+                else:
+                    ollama_exe = None
             
-            if os.path.exists(ollama_exe):
-                logger.info("[OllamaManager] Found Ollama installation. Starting background service...")
+            if ollama_exe and os.path.exists(ollama_exe):
+                logger.info(f"[OllamaManager] Found Ollama installation at {ollama_exe}. Starting background service...")
+                import subprocess
                 subprocess.Popen([ollama_exe, "serve"], creationflags=subprocess.CREATE_NO_WINDOW)
                 self._wait_for_service()
             else:
-                logger.info("[OllamaManager] Ollama not found on system. Initiating automated download and install...")
-                self._download_and_install()
+                logger.info("[OllamaManager] Ollama not found on system. Waiting for user to use the Setup button...")
+                raise FileNotFoundError("Ollama is not installed. Please go to the Norvi tab in Settings and click 'Setup'.")
                 
         # Now it should be running. Check for the target model.
         if not self._has_model(self.target_model):
-            logger.info(f"[OllamaManager] Model '{self.target_model}' not found. Pulling now (this may take a while)...")
+            logger.info(f"[OllamaManager] Model '{self.target_model}' not found. Pulling silently via background API...")
             self._pull_model(self.target_model)
         else:
             logger.info(f"[OllamaManager] Model '{self.target_model}' is already available.")
@@ -71,30 +78,6 @@ class OllamaManager:
             time.sleep(1)
         raise TimeoutError("Timed out waiting for Ollama service to start.")
 
-    def _download_and_install(self):
-        installer_path = os.path.join(os.getcwd(), "OllamaSetup.exe")
-        try:
-            # Download
-            logger.info(f"[OllamaManager] Downloading installer from {self.installer_url}...")
-            urllib.request.urlretrieve(self.installer_url, installer_path)
-            
-            # Install silently
-            logger.info("[OllamaManager] Running silent installation...")
-            # /S or /SILENT is common for Windows installers, NSIS or InnoSetup
-            subprocess.run([installer_path, "/S"], check=True, creationflags=subprocess.CREATE_NO_WINDOW)
-            
-            # Give it a moment to register and start
-            time.sleep(5)
-            self._wait_for_service(timeout=60)
-            logger.info("[OllamaManager] Installation complete and service is running.")
-            
-        finally:
-            # Cleanup installer
-            if os.path.exists(installer_path):
-                try:
-                    os.remove(installer_path)
-                except Exception as e:
-                    logger.warning(f"[OllamaManager] Failed to cleanup installer: {e}")
 
     def _has_model(self, model_name: str) -> bool:
         try:

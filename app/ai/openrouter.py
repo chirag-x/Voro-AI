@@ -20,7 +20,7 @@ class OpenRouterProvider(AIProvider):
         
     def generate(self, context: List[ConversationTurn], system_prompt: str, base64_image: str = None) -> AIResponse:
         if not self.api_key:
-            raise ValueError("API Key is missing or empty.")
+            raise ValueError("OPENROUTER_API_KEY is missing or empty.")
             
         start_time = time.time()
         
@@ -62,6 +62,16 @@ class OpenRouterProvider(AIProvider):
             "messages": messages,
             "temperature": temp
         }
+        
+        # Local Ollama RAM/VRAM memory pinning and low-latency parameters
+        if "11434" in self.base_url or "localhost" in self.base_url or "127.0.0.1" in self.base_url:
+            payload["options"] = {
+                "keep_alive": -1,
+                "num_ctx": 4096,
+                "num_predict": 2000
+            }
+            payload["keep_alive"] = -1
+            payload["max_tokens"] = 2000
         
         provider_name = "Omni Route" if "localhost:20128" in self.base_url else "OpenRouter" if "openrouter" in self.base_url else "Google Gemini" if "googleapis" in self.base_url else "OpenAI"
         logger.info(f"[ai] Sending request to {provider_name} ({self.model})...")
@@ -115,7 +125,7 @@ class OpenRouterProvider(AIProvider):
         
     def generate_stream(self, context: List[ConversationTurn], system_prompt: str, base64_image: str = None):
         if not self.api_key:
-            raise ValueError("API Key is missing or empty.")
+            raise ValueError("OPENROUTER_API_KEY is missing or empty.")
             
         messages = [{"role": "system", "content": system_prompt}]
         for i, turn in enumerate(context):
@@ -148,6 +158,16 @@ class OpenRouterProvider(AIProvider):
             "temperature": temp,
             "stream": True
         }
+        
+        # Local Ollama RAM/VRAM memory pinning and low-latency parameters
+        if "11434" in self.base_url or "localhost" in self.base_url or "127.0.0.1" in self.base_url:
+            payload["options"] = {
+                "keep_alive": -1,
+                "num_ctx": 4096,
+                "num_predict": 2000
+            }
+            payload["keep_alive"] = -1
+            payload["max_tokens"] = 2000
         
         import json
         provider_name = "Omni Route" if "localhost:20128" in self.base_url else "OpenRouter" if "openrouter" in self.base_url else "Google Gemini" if "googleapis" in self.base_url else "OpenAI"

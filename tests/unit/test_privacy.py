@@ -8,13 +8,13 @@ def test_redacting_formatter():
     # Test API Key Redaction
     record = logging.LogRecord(
         name="test", level=logging.INFO, pathname="", lineno=0,
-        msg="Using key sk-or-v1-YOUR_TEST_KEY_HERE_REDACTED",
+        msg="Using key sk-or-v1-e17f9999999999",
         args=(), exc_info=None
     )
     formatted = formatter.format(record)
     assert "sk-or-v1-e17f" in formatted
     assert "***REDACTED***" in formatted
-    assert "REDACTED" not in formatted
+    assert "9999999999" not in formatted
 
     # Test Bearer Token Redaction
     record.msg = "Authorization: Bearer my_secret_token_123==="

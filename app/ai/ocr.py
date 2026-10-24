@@ -4,9 +4,10 @@ import pytesseract
 from PIL import Image
 
 from app.core.config import load_config
+from app.vision.ocr import _configure_tesseract
 
-# Fix for Windows Tesseract installation path
-pytesseract.pytesseract.tesseract_cmd = load_config().tesseract_path
+# Configure Tesseract path and stealth subprocess flags (CREATE_NO_WINDOW)
+_configure_tesseract()
 
 logger = logging.getLogger(__name__)
 

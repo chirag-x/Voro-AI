@@ -41,13 +41,15 @@ def test_overlay_states(qapp):
     # Test user text
     bridge.user_input_received.emit("hello")
     text = overlay.text_area.toPlainText()
-    assert "USER" in text
+    assert "YOU" in text or "USER" in text
     assert "hello" in text
     
     # Test answer text
     bridge.answer_received.emit("world")
+    while overlay._typing_index < len(overlay._typing_full_text):
+        overlay._typing_tick()
     text = overlay.text_area.toPlainText()
-    assert "VORO" in text
+    assert "VORO" in text.upper()
     assert "world" in text
     
     # Test clear

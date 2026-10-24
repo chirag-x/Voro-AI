@@ -21,6 +21,17 @@ class SpeechToText:
         self.groq_api_key = groq_api_key
         self.model = None
 
+    def is_model_available(self) -> bool:
+        """Returns True if Groq API key is present or local faster-whisper model files exist."""
+        if self.groq_api_key and self.groq_api_key.strip():
+            return True
+        if self.model is not None:
+            return True
+        appdata = os.environ.get('APPDATA', os.path.expanduser("~"))
+        m_dir = self.model_dir.strip() if self.model_dir and self.model_dir.strip() else os.path.join(appdata, "Norvi", "Voro", "STT_Models")
+        m_path = os.path.join(m_dir, f"faster-whisper-{self.model_size}")
+        return os.path.exists(m_path)
+
     def initialize(self, force=False):
         """Initialize and load the model."""
         if self.groq_api_key and self.groq_api_key.strip() and not force:
@@ -29,9 +40,10 @@ class SpeechToText:
             
         logger.info(f"Loading STT model '{self.model_size}' on {self.device}...")
         
-        # Default to a local directory if none is set
+        # Default to the unified AppData directory if none is set
         if not self.model_dir or not self.model_dir.strip():
-            self.model_dir = os.path.join(os.environ.get('APPDATA', os.getcwd()), "Voro", "STT_models")
+            appdata = os.environ.get('APPDATA', os.path.expanduser("~"))
+            self.model_dir = os.path.join(appdata, "Norvi", "Voro", "STT_Models")
             
         os.makedirs(self.model_dir, exist_ok=True)
             
@@ -84,7 +96,9 @@ class SpeechToText:
         def run_transcribe(audio, lang):
             segs, inf = self.model.transcribe(
                 audio, 
-                beam_size=5,
+                beam_size=1,
+                best_of=1,
+                temperature=0.0,
                 vad_filter=False,
                 language=lang,
                 task="transcribe",

@@ -23,6 +23,18 @@ class AudioCaptureEngine(Lifecycle):
         # Loopback properties
         self._loopback_chunk = np.zeros((self.chunk_size, self.channels), dtype='float32')
         self._loopback_thread = None
+        self.mute_user_mic = False
+        self.mute_system_audio = False
+
+    def set_mute_user_mic(self, muted: bool):
+        self.mute_user_mic = muted
+        if muted and self.buffer:
+            self.buffer.clear()
+
+    def set_mute_system_audio(self, muted: bool):
+        self.mute_system_audio = muted
+        if muted and self.buffer:
+            self.buffer.clear()
 
     def initialize(self) -> None:
         """Initialize the audio streams."""
@@ -69,12 +81,12 @@ class AudioCaptureEngine(Lifecycle):
         if self._is_running:
             # Check flags directly from environment variables (much faster than load_config parsing)
             import os
-            mute_mic = os.getenv("MUTE_USER_MIC", "False").lower() == "true"
-            mute_sys = os.getenv("MUTE_SYSTEM_AUDIO", "False").lower() == "true"
+            mute_mic = getattr(self, 'mute_user_mic', False) or os.getenv("MUTE_USER_MIC", "False").lower() == "true"
+            mute_sys = getattr(self, 'mute_system_audio', False) or os.getenv("MUTE_SYSTEM_AUDIO", "False").lower() == "true"
             
-            # Anti-Feedback: Mute User Mic while Voro is actively speaking
-            if os.getenv("VORO_IS_SPEAKING", "False") == "True":
-                mute_mic = True
+
+
+
             
             # Mix the microphone indata with the latest loopback chunk
             mic_data = np.zeros_like(indata) if mute_mic else indata.copy()

@@ -85,6 +85,9 @@ class VoroConfig(BaseSettings):
     ui_vision_enabled: bool = Field(default=True, env="UI_VISION_ENABLED")
     ui_tts_rate: str = Field(default="+0%", env="UI_TTS_RATE")
     ui_tts_output_device: str = Field(default="Default System Device", env="UI_TTS_OUTPUT_DEVICE")
+    ui_auto_answer: bool = Field(default=True, env="UI_AUTO_ANSWER")
+    ui_auto_answer_hotkey: str = Field(default="ctrl+shift+u", env="UI_AUTO_ANSWER_HOTKEY")
+    ui_manual_answer_hotkey: str = Field(default="ctrl+enter", env="UI_MANUAL_ANSWER_HOTKEY")
     hint_mode_active: bool = Field(default=False)  # Runtime only
 
     # AI Options

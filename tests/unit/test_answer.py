@@ -7,7 +7,7 @@ from app.ai.models import AIResponse
 from app.session.models import ConversationTurn, Role
 
 class MockAIProvider(AIProvider):
-    def generate(self, context, system_prompt):
+    def generate(self, context, system_prompt, base64_image=None):
         return AIResponse(text="Mock Answer", model="mock", processing_time=0.1)
 
 def test_answer_mode_selection(tmp_path):

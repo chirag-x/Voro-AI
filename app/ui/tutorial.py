@@ -9,24 +9,31 @@ class TutorialDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Welcome to Voro")
         self.setFixedSize(500, 350)
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #222;
-                color: #EEE;
-            }
-            QLabel {
+        
+        from app.ui.theme import is_windows_dark_mode
+        is_dark = is_windows_dark_mode()
+        bg_col = "#222222" if is_dark else "#F8F9FA"
+        fg_col = "#EEEEEE" if is_dark else "#1A1A1A"
+        
+        self.setStyleSheet(f"""
+            QDialog {{
+                background-color: {bg_col};
+                color: {fg_col};
+            }}
+            QLabel {{
                 font-size: 14px;
-            }
-            QPushButton {
+                color: {fg_col};
+            }}
+            QPushButton {{
                 background-color: #0055A4;
                 color: white;
                 border-radius: 6px;
                 padding: 8px 16px;
                 font-weight: bold;
-            }
-            QPushButton:hover {
+            }}
+            QPushButton:hover {{
                 background-color: #0066CC;
-            }
+            }}
         """)
         
         layout = QVBoxLayout(self)
@@ -103,4 +110,3 @@ class TutorialDialog(QDialog):
             self.btn_next.setText("Finish")
         else:
             self.btn_next.setText("Next")
-

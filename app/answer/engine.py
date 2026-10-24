@@ -79,7 +79,8 @@ class AnswerEngine:
                 "- Use first-person pronouns ('I would do this...', 'I think the best approach is...').\n"
                 "- Use natural filler words occasionally ('So', 'I think', 'Well').\n"
                 "- DO NOT use complex markdown, bulleted lists, or bolding that cannot be spoken aloud.\n"
-                "- Keep sentences short, punchy, and easy to read.\n"
+                "- Keep sentences natural, clear, and easy to read aloud.\n"
+                "- When asked for a step-by-step process, system architecture, or in-depth technical explanation, provide a thorough, structured, and comprehensive walkthrough while maintaining natural spoken phrasing.\n"
                 "\nEXAMPLE BAD ANSWER:\n'Certainly! To optimize this algorithm, one must employ a Breadth-First Search. First, initialize a Hash Map...'\n"
                 "EXAMPLE GOOD ANSWER:\n'I think the best way to approach this is using a Breadth-First Search to keep track of the levels. So, my first thought here is to use a hash map...'\n"
             )
@@ -92,7 +93,8 @@ class AnswerEngine:
                 "- NEVER use AI filler words like 'Certainly', 'Here is how to do it', 'In summary', or 'In conclusion'.\n"
                 "- Use first-person pronouns ('Main soch raha tha...', 'I would do this...', 'Mera approach hoga...').\n"
                 "- Use natural filler words ('So basically', 'I think', 'Matlab').\n"
-                "- Keep sentences short and punchy.\n"
+                "- Keep sentences natural and easy to read aloud.\n"
+                "- When asked for a step-by-step process, system architecture, or in-depth technical explanation, provide a thorough, structured walkthrough in natural Hinglish.\n"
                 "\nEXAMPLE BAD ANSWER:\n'Certainly! Algorithm ko optimize karne ke liye, Breadth-First Search ka istemal karein...'\n"
                 "EXAMPLE GOOD ANSWER:\n'I think the best way is using Breadth-First Search. So, mera first thought yahan pe ek hash map use karne ka hai taaki hum levels ko track kar sakein...'\n"
             )
@@ -103,13 +105,15 @@ class AnswerEngine:
                 "- Frequently offer praise ('Great approach!', 'I love how you thought of that').\n"
                 "- Be patient and elaborate on concepts gently without being overly academic.\n"
                 "- Use markdown, bullet points, and formatting to make it easy to read.\n"
+                "- Provide comprehensive, step-by-step explanations for complex problems.\n"
             )
         else: # "Direct & Technical" or fallback
             tone_modifier = (
                 "TONE & STYLE CONSTRAINTS:\n"
                 "- Provide a highly direct, technically rigorous answer.\n"
-                "- Skip all casual conversational filler. Be incredibly concise and academic.\n"
+                "- Skip all casual conversational filler. Be technically thorough, rigorous, and direct.\n"
                 "- Rely heavily on bullet points, bolding for key terms, and markdown formatting.\n"
+                "- For architectural, design, or multi-step questions, provide full end-to-end details, components, and trade-offs.\n"
                 "- If providing code, include exact time and space complexity immediately.\n"
             )
         

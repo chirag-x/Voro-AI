@@ -1,7 +1,8 @@
 # Virtual Environments
 .venv/
 venv/
-env/
+.env*
+.env.example
 /tests/
 
 # Environment Variables
